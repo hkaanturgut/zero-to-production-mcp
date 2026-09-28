@@ -1,0 +1,65 @@
+# main -> build one image -> dev (automatic) -> prod (needs approval).
+# Required reviewers for prod are set on the GitHub Environment "prod".
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Redeploy an existing image tag (rollback). Empty = build this commit."
+        required: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false  # never interrupt a running apply
+
+env:
+  ARM_USE_OIDC: "true"
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  TF_VAR_acr_login_server: ${{ vars.ACR_LOGIN_SERVER }}
+  TF_VAR_acr_id: ${{ vars.ACR_ID }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - id: tag
+        run: echo "tag=${{ inputs.image_tag || github.sha }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v5
+        if: ${{ !inputs.image_tag }}
+      - uses: azure/login@v2
+        if: ${{ !inputs.image_tag }}
+        with:
+          client-id: ${{ vars.BUILD_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Build, scan, push (build once, promote everywhere)
+        if: ${{ !inputs.image_tag }}
+        run: |
+          az acr login --name "${{ vars.ACR_NAME }}"
+          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/dealer-mcp:${{ steps.tag.outputs.tag }}"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+
+  deploy-dev:
+    needs: build
+    uses: ./.github/workflows/_deploy-env.yml
+    with:
+      env: dev
+      image_tag: ${{ needs.build.outputs.tag }}
+
+  deploy-prod:
+    needs: [build, deploy-dev]
+    uses: ./.github/workflows/_deploy-env.yml
+    with:
+      env: prod
+      image_tag: ${{ needs.build.outputs.tag }}

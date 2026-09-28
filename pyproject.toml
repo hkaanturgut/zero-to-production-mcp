@@ -1,0 +1,47 @@
+[project]
+name = "mcp-dealer-assistant"
+version = "0.1.0"
+description = "Production-grade MCP server workshop: a sales assistant for a fictional Toronto used-car dealer"
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp==4.0.10",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "httpx>=0.27",
+    "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+otel = ["azure-monitor-opentelemetry>=1.6"]
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.6"]
+
+[project.scripts]
+dms = "dms.app:main"
+server = "server.app:main"
+dev-token = "server.devtoken:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dms", "src/server"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106"]
+"src/dms/seed.py" = ["S311"]
