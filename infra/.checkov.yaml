@@ -1,0 +1,33 @@
+# Checkov runs on every PR and fails the build on any new finding.
+# Each skip below is a deliberate, documented risk acceptance for the workshop
+# environment. The production hardening path for each is in docs/HLD.md
+# ("Decisions and open questions"). Removing a skip is the preferred fix.
+framework: terraform
+compact: true
+quiet: true
+skip-check:
+  # Network isolation phase (VNet-integrated Container Apps + private endpoints):
+  - CKV_AZURE_59    # storage public access (state account is Entra-auth only, no keys)
+  - CKV2_AZURE_33   # storage private endpoint
+  - CKV_AZURE_139   # ACR public network
+  - CKV_AZURE_237   # ACR dedicated data endpoints (Premium)
+  - CKV_AZURE_109   # Key Vault firewall
+  - CKV_AZURE_189   # Key Vault public network
+  - CKV2_AZURE_32   # Key Vault private endpoint
+  - CKV_AZURE_134   # Foundry public network
+  # Premium-tier or multi-region features, out of scope for a single-region demo:
+  - CKV_AZURE_233   # ACR zone redundancy
+  - CKV_AZURE_165   # ACR geo-replication
+  - CKV_AZURE_164   # ACR content trust (use Notation signing + policy instead)
+  - CKV_AZURE_166   # ACR quarantine (images are scanned by Trivy in CI)
+  - CKV_AZURE_167   # ACR untagged-manifest retention (Premium)
+  # Customer-managed keys: platform-managed keys accepted for demo data:
+  - CKV2_AZURE_1
+  - CKV2_AZURE_22
+  # Storage diagnostic logging is configured centrally by policy in a landing zone:
+  - CKV_AZURE_33
+  - CKV2_AZURE_21
+  # ZRS is used; the check expects GRS/RAGRS:
+  - CKV_AZURE_206
+  # The service key is rotated by re-creating it (terraform apply -replace), not by expiry:
+  - CKV_AZURE_41
