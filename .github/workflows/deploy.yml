@@ -1,15 +1,11 @@
-# main -> build one image -> dev (automatic) -> prod (needs approval).
-# Required reviewers for prod are set on the GitHub Environment "prod".
+# main -> dev (automatic) -> prod (needs approval on the GitHub Environment "prod").
+# Auth: OIDC federated credentials (create with `azd pipeline config`). No cloud secrets stored.
 name: deploy
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      image_tag:
-        description: "Redeploy an existing image tag (rollback). Empty = build this commit."
-        required: false
 
 permissions:
   contents: read
@@ -17,49 +13,38 @@ permissions:
 
 concurrency:
   group: deploy
-  cancel-in-progress: false  # never interrupt a running apply
-
-env:
-  ARM_USE_OIDC: "true"
-  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-  TF_VAR_acr_login_server: ${{ vars.ACR_LOGIN_SERVER }}
-  TF_VAR_acr_id: ${{ vars.ACR_ID }}
+  cancel-in-progress: false  # never interrupt a running deployment
 
 jobs:
-  build:
+  deploy:
+    strategy:
+      max-parallel: 1
+      matrix:
+        env: [dev, prod]
     runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.tag.outputs.tag }}
+    environment: ${{ matrix.env }}   # prod waits here for a reviewer
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_ENV_NAME: ${{ vars.AZURE_ENV_NAME }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      DMS_API_KEY: ${{ secrets.DMS_API_KEY }}   # stable per environment, lands in Key Vault
     steps:
-      - id: tag
-        run: echo "tag=${{ inputs.image_tag || github.sha }}" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v5
-        if: ${{ !inputs.image_tag }}
-      - uses: azure/login@v2
-        if: ${{ !inputs.image_tag }}
+      - uses: Azure/setup-azd@v2
+      - uses: azure/login@v2   # az CLI, used by the postprovision hook (base image mirror)
         with:
-          client-id: ${{ vars.BUILD_CLIENT_ID }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      - name: Build, scan, push (build once, promote everywhere)
-        if: ${{ !inputs.image_tag }}
+      - name: Sign in with OIDC
         run: |
-          az acr login --name "${{ vars.ACR_NAME }}"
-          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/dealer-mcp:${{ steps.tag.outputs.tag }}"
-          docker build -t "$IMAGE" .
-          docker push "$IMAGE"
-
-  deploy-dev:
-    needs: build
-    uses: ./.github/workflows/_deploy-env.yml
-    with:
-      env: dev
-      image_tag: ${{ needs.build.outputs.tag }}
-
-  deploy-prod:
-    needs: [build, deploy-dev]
-    uses: ./.github/workflows/_deploy-env.yml
-    with:
-      env: prod
-      image_tag: ${{ needs.build.outputs.tag }}
+          azd auth login --client-id "$AZURE_CLIENT_ID" --tenant-id "$AZURE_TENANT_ID" \
+            --federated-credential-provider github
+      - name: Provision (idempotent)
+        run: azd provision --no-prompt
+      - name: Deploy
+        run: azd deploy --no-prompt
+      - name: Smoke test
+        run: ./scripts/smoke.sh "$(azd env get-value MCP_URL)"

@@ -11,6 +11,8 @@ from typing import Any, TypeVar
 import mcp_types
 from fastmcp import Context
 from fastmcp.exceptions import ToolError
+from mcp_types.version import MODERN_PROTOCOL_VERSIONS
+from pydantic import BaseModel
 
 from server.auth import Caller
 from server.backend.base import BackendError, BackendUnavailable, DmsBackend
@@ -62,18 +64,37 @@ async def call_backend(fn: Callable[[], Awaitable[T]]) -> T:
         raise ToolError(str(exc)) from None
 
 
-def confirmation(
+class Confirm(BaseModel):
+    confirm: bool
+
+
+def _modern(ctx: Context) -> bool:
+    """True on 2026-07-28 connections (multi round-trip); False on handshake-era ones."""
+    rc = getattr(ctx, "request_context", None)
+    return rc is not None and getattr(rc, "protocol_version", None) in MODERN_PROTOCOL_VERSIONS
+
+
+async def confirmation(
     ctx: Context, *, message: str, state: dict[str, Any]
 ) -> mcp_types.InputRequiredResult | None:
-    """Ask the human to confirm, using the 2026-07-28 multi round-trip flow.
+    """Ask the human to confirm before a destructive or costly action.
 
-    Round 1: returns an InputRequiredResult; the client shows the question.
-    Round 2: the client retries the same call with the answer. We check the
-    answer, and check that the arguments still match what was confirmed
-    (the framework seals request_state, so it cannot be forged).
+    2026-07-28 clients (stateless): multi round-trip.
+      Round 1 returns an InputRequiredResult; the client shows the question.
+      Round 2 the client retries the same call with the answer. We check the
+      answer and that the arguments still match what was confirmed (the
+      framework seals request_state, so it cannot be forged).
+    Handshake-era clients (2025-11-25 and earlier): classic elicitation over
+      the open session, same question, same rules.
 
     Returns None when confirmed; raises ToolError when declined or tampered.
     """
+    if not _modern(ctx):
+        answer = await ctx.elicit(message, response_type=Confirm)
+        if getattr(answer, "action", None) != "accept" or not answer.data.confirm:
+            raise ToolError("The user did not confirm. Nothing was changed.")
+        return None
+
     responses = ctx.input_responses
     if not responses:
         return mcp_types.InputRequiredResult(
@@ -81,17 +102,7 @@ def confirmation(
                 "confirm": mcp_types.ElicitRequest(
                     params=mcp_types.ElicitRequestFormParams(
                         message=message,
-                        requested_schema={
-                            "type": "object",
-                            "properties": {
-                                "confirm": {
-                                    "type": "boolean",
-                                    "title": "Confirm",
-                                    "description": message,
-                                }
-                            },
-                            "required": ["confirm"],
-                        },
+                        requested_schema=Confirm.model_json_schema(),
                     )
                 )
             },

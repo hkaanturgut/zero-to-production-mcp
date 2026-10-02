@@ -7,7 +7,7 @@ A remote MCP server that lets a salesperson's agent search inventory, quote all-
 estimate payments and book test drives at a **fictional** Toronto used-car dealer. The
 scenario is only the showcase. The point is the patterns: authentication, least privilege,
 human confirmation, secrets the model never sees, failure handling, observability, and a
-Terraform + GitHub Actions path to Azure.
+Bicep + azd path to Azure, with GitHub Actions for CI/CD.
 
 All cars, customers and leads are synthetic.
 
@@ -46,7 +46,7 @@ In Azure the server runs with `AUTH_MODE=entra` and trusts only Microsoft Entra 
 ## Run the tests
 
 ```bash
-uv run pytest -q          # 65 tests: auth, policy, confirmation, resilience, secret hygiene
+uv run pytest -q          # 75 tests: auth, policy, confirmation, resilience, secrets, every live stage
 uv run ruff check src tests
 ```
 
@@ -66,21 +66,38 @@ uv run ruff check src tests
 | Tool contract guardrails in CI | `tests/test_tool_contracts.py` |
 | Failure injection for live demos | `POST /_chaos {"mode": "slow" \| "errors" \| "flaky" \| "off"}` on the DMS |
 
-## Deploy to Azure
+## Deploy to Azure (Bicep + azd)
 
-1. **Bootstrap once** (platform admin, local state):
-   `terraform -chdir=infra/bootstrap apply -var subscription_id=... -var github_repository=owner/repo`
-2. **Copy the `github_variables` output** into GitHub:
-   repository variables `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `ACR_NAME`, `ACR_LOGIN_SERVER`,
-   `ACR_ID`, `TFSTATE_RG`, `TFSTATE_ACCOUNT`, `BUILD_CLIENT_ID`, `PLAN_CLIENT_ID_dev`,
-   `PLAN_CLIENT_ID_prod`; environment variable `APPLY_CLIENT_ID` on the `dev` and `prod`
-   environments. None of these are secrets.
-3. **Protect `prod`**: add required reviewers on the GitHub Environment.
-4. **Open a PR**: CI runs tests, image scan, Terraform static checks and posts a plan per environment.
-5. **Merge**: `deploy.yml` builds one image, deploys dev, smoke-tests it, then waits for prod approval.
-6. **Connect a Foundry agent**: see `docs/foundry-agent.md`.
+Requires [azd](https://aka.ms/azd) and the Azure CLI. Your account needs rights to create
+resource groups and app registrations.
 
-Rollback: run `deploy` manually with a previous `image_tag`.
+```bash
+azd auth login && az login
+azd env new mcpdev --location canadacentral
+azd up                       # provision (about 6 to 8 min) + build in ACR + deploy
+azd env get-value MCP_URL    # https://ca-mcp-mcpdev.<region>.azurecontainerapps.io/mcp
+```
+
+| Command | When |
+| --- | --- |
+| `azd provision` | Infra only (run before the talk) |
+| `azd deploy mcp` | Ship new server code only, about 2 to 3 min (on stage) |
+| `azd env set MCP_COMMAND server && azd provision` | Switch the cloud app to the full reference build |
+| `azd env set ASSIGN_MANAGER_ROLE true && azd provision` | Make yourself a sales manager (confirmation demo in VS Code) |
+| `azd env set DEPLOY_FOUNDRY true && azd provision` | Add a Foundry account, project and model |
+| `azd down --purge --force` | Delete everything, including the soft-deleted Key Vault |
+
+What gets created: resource group, Log Analytics + App Insights, managed identity, ACR
+(admin disabled, base image mirrored in), Key Vault (RBAC, generated service key),
+Container Apps environment with `ca-mcp-<env>` (public) and `ca-dms-<env>` (internal only),
+and an Entra app registration with 2 delegated scopes, 3 app roles and VS Code pre-authorized.
+
+**Connect VS Code:** put the `MCP_URL` in `.vscode/mcp.json` as an `http` server, then
+*MCP: List Servers > Start*. VS Code signs you in with Microsoft automatically.
+
+**CI/CD:** `azd pipeline config` creates the GitHub OIDC identity and variables. Add a
+`DMS_API_KEY` secret per GitHub Environment, and required reviewers on `prod`. The deploy
+identity also needs Microsoft Graph permission to manage the app registration.
 
 ## Layout
 
@@ -88,7 +105,9 @@ Rollback: run `deploy` manually with a previous `image_tag`.
 src/dms/        mock dealer system (FastAPI, API key, chaos switch)
 src/server/     MCP server (FastMCP 4, spec 2026-07-28)
 tests/          pytest suite over real HTTP with real JWTs
-infra/          bootstrap, platform module, dev/prod stacks
-.github/        ci.yml (PR), deploy.yml (main), _deploy-env.yml (reusable)
+infra/          main.bicep + modules (platform, entra, foundry), azd parameters
+workshop/       stage files 0-5 and paste snippets for the live build
+src/live/       the file you build on stage (equals workshop/stages/stage_5.py on main)
+.github/        ci.yml (PR), deploy.yml (main, azd, dev then prod)
 docs/           HLD pointer, Foundry agent setup, production checklist
 ```

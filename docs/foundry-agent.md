@@ -1,7 +1,7 @@
 # Connect a Foundry agent to the MCP server
 
-The Foundry project, model deployment and the server's Entra app registration are
-created by Terraform. The agent and its MCP tool connection are data-plane
+With `DEPLOY_FOUNDRY=true`, the Foundry project and model deployment are created by
+`azd provision`, alongside the server's Entra app registration. The agent and its MCP tool connection are data-plane
 configuration, set up once per environment.
 
 ## 1. Give the agent an identity the server trusts
@@ -9,12 +9,11 @@ configuration, set up once per environment.
 The server accepts app-only tokens whose `roles` claim contains `dms.read` and
 `dms.write`. It never grants `dms.manager` to an application.
 
-* **Project managed identity** (all agents in the project share it): take
-  `foundry_project_principal_id` from `terraform output` and add it to
-  `foundry_agent_principal_ids` in the environment stack, then apply.
+* **Project managed identity** (all agents in the project share it):
+  `azd env set AGENT_PRINCIPAL_IDS "$(azd env get-value FOUNDRY_PROJECT_PRINCIPAL_ID)" && azd provision`
 * **Agent identity** (one identity per published agent, recommended for least
-  privilege): after publishing the agent, add its service principal object ID to
-  `foundry_agent_principal_ids` instead.
+  privilege): after publishing the agent, put its service principal object ID in
+  `AGENT_PRINCIPAL_IDS` instead (comma-separated for several).
 
 ## 2. Add the MCP tool to the agent
 
@@ -23,10 +22,10 @@ Model Context Protocol, then:
 
 | Field | Value |
 | --- | --- |
-| Remote MCP Server endpoint | `terraform output -raw mcp_url` |
+| Remote MCP Server endpoint | `azd env get-value MCP_URL` |
 | Authentication | Microsoft Entra |
 | Type | Agent identity (or Project managed identity) |
-| Audience | the `entra_client_id` output (the token audience) |
+| Audience | `azd env get-value ENTRA_CLIENT_ID` (the token audience) |
 
 CLI alternative:
 
@@ -34,7 +33,7 @@ CLI alternative:
 azd ai project set "<project endpoint>"
 azd ai connection create dealer-mcp \
   --kind remote-tool \
-  --target "$(terraform output -raw mcp_url)" \
+  --target "$(azd env get-value MCP_URL)" \
   --auth-type agentic-identity \
   --audience "<entra_client_id>"
 ```

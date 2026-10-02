@@ -1,5 +1,4 @@
-# Pull request checks. Nothing here can change Azure: the plan identity is
-# read-only and only trusts tokens issued for pull_request events.
+# Pull request checks. Nothing here touches Azure.
 name: ci
 
 on:
@@ -24,7 +23,7 @@ jobs:
       - run: uv sync --frozen
       - name: Lint
         run: uv run ruff check src tests && uv run ruff format --check src tests
-      - name: Tests (auth, policy, resilience, secrets)
+      - name: Tests (auth, policy, resilience, secrets, every live stage)
         run: uv run pytest -q
 
   image:
@@ -41,73 +40,12 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
-  terraform-static:
+  bicep:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: infra
     steps:
       - uses: actions/checkout@v5
-      - uses: hashicorp/setup-terraform@v3
-      - run: terraform fmt -recursive -check
-      - name: Validate every stack
+      - name: Build and lint Bicep (linter errors fail the build)
         run: |
-          for d in bootstrap envs/dev envs/prod; do
-            terraform -chdir=$d init -backend=false -input=false >/dev/null
-            terraform -chdir=$d validate
-          done
-      - uses: terraform-linters/setup-tflint@v4
-      - run: tflint --init --config "$PWD/.tflint.hcl" && tflint --recursive --config "$PWD/.tflint.hcl"
-      - name: Checkov (documented skips in infra/.checkov.yaml)
-        uses: bridgecrewio/checkov-action@v12
-        with:
-          directory: infra
-          config_file: infra/.checkov.yaml
-
-  plan:
-    needs: [test, terraform-static]
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        env: [dev, prod]
-    permissions:
-      contents: read
-      id-token: write       # OIDC token for Azure, no stored secrets
-      pull-requests: write  # post the plan as a comment
-    env:
-      ARM_USE_OIDC: "true"
-      ARM_CLIENT_ID: ${{ vars[format('PLAN_CLIENT_ID_{0}', matrix.env)] }}
-      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      TF_VAR_image_tag: ${{ github.sha }}
-      TF_VAR_acr_login_server: ${{ vars.ACR_LOGIN_SERVER }}
-      TF_VAR_acr_id: ${{ vars.ACR_ID }}
-    steps:
-      - uses: actions/checkout@v5
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_wrapper: false
-      - name: Init
-        working-directory: infra/envs/${{ matrix.env }}
-        run: >
-          terraform init -input=false
-          -backend-config="resource_group_name=${{ vars.TFSTATE_RG }}"
-          -backend-config="storage_account_name=${{ vars.TFSTATE_ACCOUNT }}"
-          -backend-config="container_name=tfstate-${{ matrix.env }}"
-      - name: Plan
-        id: plan
-        working-directory: infra/envs/${{ matrix.env }}
-        run: |
-          terraform plan -input=false -no-color -lock-timeout=5m -out=tfplan | tee plan.txt
-          echo "summary=$(grep -E '^Plan:|No changes' plan.txt | tail -1)" >> "$GITHUB_OUTPUT"
-      - name: Comment plan on the PR
-        uses: actions/github-script@v8
-        env:
-          ENV_NAME: ${{ matrix.env }}
-          SUMMARY: ${{ steps.plan.outputs.summary }}
-        with:
-          script: |
-            const fs = require('fs');
-            const plan = fs.readFileSync('infra/envs/' + process.env.ENV_NAME + '/plan.txt', 'utf8');
-            const body = `### Terraform plan: \`${process.env.ENV_NAME}\`\n**${process.env.SUMMARY}**\n<details><summary>Show plan</summary>\n\n\`\`\`\n${plan.slice(-60000)}\n\`\`\`\n</details>`;
-            await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+          az bicep install
+          az bicep build --file infra/main.bicep --stdout > /dev/null
+          az bicep lint --file infra/main.bicep
