@@ -4,8 +4,6 @@ Wraps the dealer's internal API (the mock DMS) as agent tools, then hardens it:
 auth, least privilege, human confirmation, secrets, failure handling.
 """
 
-import asyncio
-import logging
 import os
 from typing import Annotated, Literal
 
@@ -16,13 +14,11 @@ from fastmcp.server.auth import RemoteAuthProvider, restrict_tag
 from fastmcp.server.auth.providers.jwt import JWTVerifier
 from fastmcp.server.dependencies import get_access_token
 from fastmcp.server.middleware import AuthMiddleware
-from fastmcp.server.middleware.rate_limiting import RateLimitingMiddleware
 from pydantic import BaseModel, Field
 from starlette.responses import JSONResponse
 
 from server.domain.masking import mask_lead  # the company's existing PII rules
 from server.domain.pricing import all_in_quote  # the company's existing pricing rules
-from server.middleware import AuditMiddleware, caller_key
 from server.tools.common import confirmation  # 2026-07-28 human-in-the-loop helper
 
 # --------------------------------------------------------------------------- config
@@ -74,9 +70,6 @@ def build_auth() -> RemoteAuthProvider:
     )
 
 
-# One JSON audit line per tool call on stdout (Container Apps ships it to Log Analytics).
-logging.basicConfig(level=logging.INFO, format="%(message)s")
-
 mcp = FastMCP(
     "dealer-sales-assistant",
     instructions="Sales assistant for a Toronto used-car dealer. Quote prices only from "
@@ -84,10 +77,6 @@ mcp = FastMCP(
     auth=build_auth(),
     mask_error_details=True,  # no stack traces or hostnames reach the model
     middleware=[
-        AuditMiddleware(),
-        RateLimitingMiddleware(
-            max_requests_per_second=5, burst_capacity=20, get_client_id=caller_key
-        ),
         AuthMiddleware(
             auth=[
                 restrict_tag("read", scopes=["dms.read"]),
@@ -113,24 +102,7 @@ dms = httpx.AsyncClient(base_url=DMS_URL, headers={"X-API-Key": DMS_KEY})
 
 
 async def call_dms(method: str, path: str, **kwargs) -> dict:
-    """Every backend call: hard deadline, retries for reads only, clean errors."""
-    attempts = 3 if method == "GET" else 1  # never blindly retry a write
-    for attempt in range(attempts):
-        try:
-            async with asyncio.timeout(1.5):
-                resp = await dms.request(method, path, **kwargs)
-            if resp.status_code < 500:
-                break
-        except (httpx.TransportError, TimeoutError):
-            pass
-        if attempt + 1 < attempts:
-            await asyncio.sleep(0.2 * 2**attempt)
-    else:
-        raise ToolError("The dealer system is not responding. Try again shortly (retryable).")
-    if resp.status_code == 404:
-        raise ToolError("Not found. Use search_inventory to find valid stock numbers.")
-    if resp.status_code == 409:
-        raise ToolError(resp.json()["detail"])
+    resp = await dms.request(method, path, **kwargs)
     resp.raise_for_status()
     return resp.json()
 
