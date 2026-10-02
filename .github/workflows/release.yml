@@ -1,0 +1,195 @@
+# Push to main -> dev (automatic) -> prod (gated).
+#
+#   infra/ or azure.yaml changed   -> azd provision
+#   src/, Dockerfile, uv.lock ...  -> build once, scan, push to the dev ACR, deploy;
+#                                     prod gets the SAME digest via az acr import
+#   both                           -> provision first, then deploy (per environment)
+#
+# Auth: OIDC federated credentials on the CI app registration. No cloud secrets stored.
+# The only secret is DMS_API_KEY per GitHub environment (it lands in Key Vault).
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: What to roll out
+        type: choice
+        options: [auto, all, infra, app]
+        default: auto
+      prod:
+        description: Continue to prod after dev
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false # never interrupt a running deployment
+
+env:
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+  IMAGE_REPO: dealer-mcp
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      infra: ${{ steps.pick.outputs.infra }}
+      app: ${{ steps.pick.outputs.app }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            infra:
+              - 'infra/**'
+              - 'azure.yaml'
+              - 'scripts/azd-*'
+            app:
+              - 'src/**'
+              - 'Dockerfile'
+              - '.dockerignore'
+              - 'pyproject.toml'
+              - 'uv.lock'
+      - id: pick
+        env:
+          SCOPE: ${{ inputs.scope || 'auto' }}
+          F_INFRA: ${{ steps.filter.outputs.infra }}
+          F_APP: ${{ steps.filter.outputs.app }}
+        run: |
+          case "$SCOPE" in
+            all)   infra=true;  app=true ;;
+            infra) infra=true;  app=false ;;
+            app)   infra=false; app=true ;;
+            *)     infra=$F_INFRA; app=$F_APP ;;
+          esac
+          echo "infra=$infra" >> "$GITHUB_OUTPUT"; echo "app=$app" >> "$GITHUB_OUTPUT"
+          echo "### Rollout plan: infra=$infra, app=$app" >> "$GITHUB_STEP_SUMMARY"
+
+  dev:
+    needs: changes
+    if: needs.changes.outputs.infra == 'true' || needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    environment: dev
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+      registry_id: ${{ steps.image.outputs.registry_id }}
+    env:
+      AZURE_ENV_NAME: ${{ vars.AZURE_ENV_NAME }}
+      DMS_API_KEY: ${{ secrets.DMS_API_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: Azure/setup-azd@v2
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Sign in azd with OIDC
+        run: azd auth login --client-id "$AZURE_CLIENT_ID" --tenant-id "$AZURE_TENANT_ID" --federated-credential-provider github
+      - run: az extension add --name containerapp --upgrade --yes --only-show-errors
+      - name: Prepare azd environment
+        id: azdenv
+        run: ./scripts/ci-azd-env.sh
+
+      - name: Provision (Bicep via azd)
+        if: needs.changes.outputs.infra == 'true' || steps.azdenv.outputs.first_deploy == 'true'
+        run: azd provision --no-prompt
+      - name: Load outputs of the last provision
+        if: needs.changes.outputs.infra != 'true' && steps.azdenv.outputs.first_deploy != 'true'
+        run: azd env refresh --no-prompt
+
+      - name: Build image once
+        id: image
+        if: needs.changes.outputs.app == 'true' || steps.azdenv.outputs.first_deploy == 'true'
+        run: |
+          acr=$(azd env get-value AZURE_CONTAINER_REGISTRY_ENDPOINT)
+          image="$acr/$IMAGE_REPO:${GITHUB_SHA::12}"
+          az acr login --name "${acr%%.*}"
+          docker build --build-arg PYTHON_IMAGE="$acr/base/python:3.11-slim" -t "$image" .
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "registry_id=$(az acr show --name "${acr%%.*}" --query id -o tsv)" >> "$GITHUB_OUTPUT"
+      - name: Scan image (HIGH and CRITICAL fail the release)
+        if: steps.image.outputs.image
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ${{ steps.image.outputs.image }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Push and deploy
+        if: steps.image.outputs.image
+        run: |
+          docker push "${{ steps.image.outputs.image }}"
+          ./scripts/ci-deploy-image.sh "${{ steps.image.outputs.image }}"
+      - name: Re-provision after the first deploy (adds health probes)
+        if: steps.azdenv.outputs.first_deploy == 'true'
+        run: ./scripts/ci-azd-env.sh && azd provision --no-prompt
+
+      - name: Smoke test
+        run: ./scripts/smoke.sh "$(azd env get-value MCP_URL)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  prod:
+    needs: [changes, dev]
+    # Push to main: only when repo variable PROD_ON_PUSH is 'true' (needs a reviewer
+    # rule on the prod environment). Manual run: when the "prod" box is ticked.
+    if: >-
+      (github.event_name == 'push' && vars.PROD_ON_PUSH == 'true') ||
+      (github.event_name == 'workflow_dispatch' && inputs.prod)
+    runs-on: ubuntu-latest
+    environment: prod # a reviewer approves here when the environment has the rule
+    env:
+      AZURE_ENV_NAME: ${{ vars.AZURE_ENV_NAME }}
+      DMS_API_KEY: ${{ secrets.DMS_API_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: Azure/setup-azd@v2
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Sign in azd with OIDC
+        run: azd auth login --client-id "$AZURE_CLIENT_ID" --tenant-id "$AZURE_TENANT_ID" --federated-credential-provider github
+      - run: az extension add --name containerapp --upgrade --yes --only-show-errors
+      - name: Prepare azd environment
+        id: azdenv
+        run: ./scripts/ci-azd-env.sh
+
+      - name: Provision (Bicep via azd)
+        if: needs.changes.outputs.infra == 'true' || steps.azdenv.outputs.first_deploy == 'true'
+        run: azd provision --no-prompt
+      - name: Load outputs of the last provision
+        if: needs.changes.outputs.infra != 'true' && steps.azdenv.outputs.first_deploy != 'true'
+        run: azd env refresh --no-prompt
+
+      - name: Promote the exact image dev tested (no rebuild)
+        id: image
+        if: needs.dev.outputs.image
+        env:
+          DEV_IMAGE: ${{ needs.dev.outputs.image }}
+          DEV_REGISTRY_ID: ${{ needs.dev.outputs.registry_id }}
+        run: |
+          acr=$(azd env get-value AZURE_CONTAINER_REGISTRY_ENDPOINT)
+          tag="${DEV_IMAGE#*/}"   # dealer-mcp:<sha>
+          az acr import --name "${acr%%.*}" --registry "$DEV_REGISTRY_ID" --source "$tag" --image "$tag" --force
+          echo "image=$acr/$tag" >> "$GITHUB_OUTPUT"
+      - name: Deploy
+        if: steps.image.outputs.image
+        run: ./scripts/ci-deploy-image.sh "${{ steps.image.outputs.image }}"
+      - name: Re-provision after the first deploy (adds health probes)
+        if: steps.azdenv.outputs.first_deploy == 'true' && steps.image.outputs.image
+        run: ./scripts/ci-azd-env.sh && azd provision --no-prompt
+
+      - name: Smoke test
+        run: ./scripts/smoke.sh "$(azd env get-value MCP_URL)" | tee -a "$GITHUB_STEP_SUMMARY"
