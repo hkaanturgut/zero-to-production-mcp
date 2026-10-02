@@ -6,7 +6,8 @@
 #   ./scripts/demo.sh token manager    print a local token (salesperson|manager|agent|readonly)
 #   ./scripts/demo.sh chaos slow       break the DMS on purpose (slow|errors|flaky|off)
 #   ./scripts/demo.sh reset            fresh demo data, chaos off
-#   ./scripts/demo.sh inspector        open MCP Inspector
+#   ./scripts/demo.sh inspector [persona]   MCP Inspector, pre-connected to :8080 (with a token from stage 3)
+#   ./scripts/demo.sh rehearse         run every runbook step automatically and report PASS/FAIL
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -30,6 +31,11 @@ case "${1:-}" in
   token)     uv run dev-token "${2:-salesperson}" ;;
   chaos)     dms_post /_chaos "{\"mode\": \"${2:?slow|errors|flaky|off}\"}" ;;
   reset)     dms_post /_reset ;;
-  inspector) exec npx -y @modelcontextprotocol/inspector ;;
-  *) sed -n '2,10p' "$0"; exit 1 ;;
+  inspector)
+    # Restart this to switch persona (salesperson -> manager in stage 4).
+    args=(--web --transport http --server-url http://127.0.0.1:8080/mcp --protocol-era modern)
+    [ -n "${2:-}" ] && args+=(--header "Authorization: Bearer $(uv run dev-token "$2")")
+    exec npx -y @modelcontextprotocol/inspector "${args[@]}" ;;
+  rehearse)  exec uv run python workshop/rehearse.py "${@:2}" ;;
+  *) sed -n '2,12p' "$0"; exit 1 ;;
 esac

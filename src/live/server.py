@@ -5,6 +5,7 @@ auth, least privilege, human confirmation, secrets, failure handling.
 """
 
 import asyncio
+import logging
 import os
 from typing import Annotated, Literal
 
@@ -34,12 +35,16 @@ PERMISSIONS = {"dms.read", "dms.write", "dms.manager"}
 
 
 # --------------------------------------------------------------------------- auth
+# Agents (app roles) and people (scopes) carry permissions under different names.
+ROLES = {"dms.agent.read": "dms.read", "dms.agent.write": "dms.write", "dms.manager": "dms.manager"}
+
+
 class EntraVerifier(JWTVerifier):
-    """People carry permissions in `scp`, agents in `roles`: merge them."""
+    """People carry permissions in `scp`, agents in `roles`: merge into one set."""
 
     def _extract_scopes(self, claims):
-        perms = set(super()._extract_scopes(claims)) | set(claims.get("roles", []))
-        return sorted(perms & PERMISSIONS)
+        roles = {ROLES[r] for r in claims.get("roles", []) if r in ROLES}
+        return sorted((set(super()._extract_scopes(claims)) | roles) & PERMISSIONS)
 
 
 def build_auth() -> RemoteAuthProvider:
@@ -51,7 +56,8 @@ def build_auth() -> RemoteAuthProvider:
             issuer=issuer,
             audience=client_id,
         )
-        scopes = [f"api://{client_id}/dms.read", f"api://{client_id}/dms.write"]
+        api = os.environ.get("ENTRA_API_URI", f"api://{client_id}")  # app ID URI
+        scopes = [f"{api}/dms.read", f"{api}/dms.write"]
     else:  # local rehearsal tokens from `uv run dev-token <persona>`
         issuer = "https://dev.local/dealer-mcp"
         verifier = EntraVerifier(
@@ -67,6 +73,9 @@ def build_auth() -> RemoteAuthProvider:
         scopes_supported=scopes,
     )
 
+
+# One JSON audit line per tool call on stdout (Container Apps ships it to Log Analytics).
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 mcp = FastMCP(
     "dealer-sales-assistant",

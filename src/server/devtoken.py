@@ -45,7 +45,7 @@ PERSONAS = {
             "oid": "demo-foundry-agent",
             "azp": "foundry-sales-agent",
             "idtyp": "app",
-            "roles": ["dms.read", "dms.write"],
+            "roles": ["dms.agent.read", "dms.agent.write"],
         },
     },
     "readonly": {

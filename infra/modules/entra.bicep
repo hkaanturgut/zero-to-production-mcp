@@ -2,7 +2,8 @@
 //
 //  * Delegated scopes dms.read, dms.write: what a signed-in salesperson's client
 //    (VS Code) requests. VS Code is pre-authorized, so no consent prompt on stage.
-//  * App roles dms.read, dms.write (Application): for Foundry agent identities.
+//  * App roles dms.agent.read, dms.agent.write (Application): for Foundry agent identities.
+//    (Entra requires role values to differ from scope values; the server maps them.)
 //  * App role dms.manager (User): only for sales managers. A role, not a scope,
 //    so nobody can consent their way into manager rights.
 //
@@ -19,6 +20,10 @@ param agentPrincipalIds array = []
 
 // VS Code's well-known client ID (Microsoft docs: "Secure MCP calls ... from Visual Studio Code").
 var vsCodeClientId = 'aebc6443-996d-45c2-90f0-388ff96faa56'
+// Azure CLI's well-known client ID: lets you get a token for rehearsals with
+//   az account get-access-token --scope <ENTRA_API_URI>/dms.read
+var azureCliClientId = '04b07795-8ddb-461a-bbee-02f9e1bf7b46'
+var identifierUri = 'api://${tenant().tenantId}/dealer-mcp-${environmentName}'
 
 // Stable IDs across re-deployments.
 var scopeReadId = guid(subscription().id, environmentName, 'scope-dms.read')
@@ -32,7 +37,7 @@ resource app 'Microsoft.Graph/applications@v1.0' = {
   displayName: 'Dealer Sales MCP (${environmentName})'
   signInAudience: 'AzureADMyOrg'
   // Tenant-scoped URI form, allowed by the default app ID URI policy.
-  identifierUris: ['api://${tenant().tenantId}/dealer-mcp-${environmentName}']
+  identifierUris: [identifierUri]
   api: {
     // v2 tokens: aud = this app's client ID, iss = .../v2.0 (what the server validates).
     requestedAccessTokenVersion: 2
@@ -63,12 +68,16 @@ resource app 'Microsoft.Graph/applications@v1.0' = {
         appId: vsCodeClientId
         delegatedPermissionIds: [scopeReadId, scopeWriteId]
       }
+      {
+        appId: azureCliClientId
+        delegatedPermissionIds: [scopeReadId, scopeWriteId]
+      }
     ]
   }
   appRoles: [
     {
       id: roleReadId
-      value: 'dms.read'
+      value: 'dms.agent.read'
       allowedMemberTypes: ['Application']
       displayName: 'Agent: read inventory'
       description: 'Lets an agent identity use read tools.'
@@ -76,7 +85,7 @@ resource app 'Microsoft.Graph/applications@v1.0' = {
     }
     {
       id: roleWriteId
-      value: 'dms.write'
+      value: 'dms.agent.write'
       allowedMemberTypes: ['Application']
       displayName: 'Agent: leads and small discounts'
       description: 'Lets an agent identity create leads and apply small discounts.'
@@ -117,6 +126,7 @@ resource agentWrite 'Microsoft.Graph/appRoleAssignedTo@v1.0' = [for id in agentP
 }]
 
 output clientId string = app.appId
+output apiUri string = identifierUri
 output servicePrincipalId string = sp.id
 output roleReadId string = roleReadId
 output roleWriteId string = roleWriteId
