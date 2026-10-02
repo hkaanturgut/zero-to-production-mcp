@@ -1,4 +1,4 @@
-# Pull request checks. Nothing here touches Azure.
+# Pull request checks. Only the what-if job reads Azure (OIDC, dev), and it changes nothing.
 name: ci
 
 on:
@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write # what-if job only: OIDC sign-in to Azure
 
 concurrency:
   group: ci-${{ github.event.pull_request.number }}
@@ -49,3 +50,32 @@ jobs:
           az bicep install
           az bicep build --file infra/main.bicep --stdout > /dev/null
           az bicep lint --file infra/main.bicep
+
+  whatif:
+    # What would this PR change in dev? Shown in the job summary. Changes nothing.
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_ENV_NAME: ${{ vars.AZURE_ENV_NAME }}
+      DMS_API_KEY: ${{ secrets.DMS_API_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: Azure/setup-azd@v2
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Sign in azd with OIDC
+        run: azd auth login --client-id "$AZURE_CLIENT_ID" --tenant-id "$AZURE_TENANT_ID" --federated-credential-provider github
+      - run: az extension add --name containerapp --upgrade --yes --only-show-errors
+      - run: ./scripts/ci-azd-env.sh
+      - name: azd provision --preview (what-if on dev)
+        run: |
+          set -o pipefail
+          azd provision --preview --no-prompt 2>&1 | tee whatif.txt
+          { echo '### What-if on dev'; echo '```'; sed 's/\x1b\[[0-9;]*m//g' whatif.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
