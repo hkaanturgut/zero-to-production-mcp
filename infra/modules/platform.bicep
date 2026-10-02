@@ -4,6 +4,8 @@ param location string
 param tags object
 param principalId string
 param entraClientId string
+@description('Application ID URI of the server app registration: prefix of the advertised scopes.')
+param entraApiUri string
 @secure()
 param dmsApiKey string
 param mcpCommand string
@@ -128,11 +130,13 @@ resource env 'Microsoft.App/managedEnvironments@2025-07-01' = {
 }
 
 // Keep whatever image azd last deployed when provisioning again.
-resource existingMcp 'Microsoft.App/containerApps@2025-07-01' existing = if (mcpExists) {
-  name: mcpName
+module mcpImage 'fetch-image.bicep' = {
+  name: 'mcp-image'
+  params: { name: mcpName, exists: mcpExists }
 }
-resource existingDms 'Microsoft.App/containerApps@2025-07-01' existing = if (dmsExists) {
-  name: dmsName
+module dmsImage 'fetch-image.bicep' = {
+  name: 'dms-image'
+  params: { name: dmsName, exists: dmsExists }
 }
 
 var dmsKeySecretRef = [
@@ -173,7 +177,7 @@ resource dms 'Microsoft.App/containerApps@2025-07-01' = {
       containers: [
         {
           name: 'dms'
-          image: dmsExists ? existingDms!.properties.template.containers[0].image : placeholderImage
+          image: dmsExists ? dmsImage.outputs.image : placeholderImage
           resources: { cpu: json('0.25'), memory: '0.5Gi' }
           env: [
             { name: 'HOST', value: '0.0.0.0' }
@@ -217,7 +221,7 @@ resource mcp 'Microsoft.App/containerApps@2025-07-01' = {
       containers: [
         {
           name: 'mcp'
-          image: mcpExists ? existingMcp!.properties.template.containers[0].image : placeholderImage
+          image: mcpExists ? mcpImage.outputs.image : placeholderImage
           resources: { cpu: json('0.5'), memory: '1Gi' }
           env: [
             { name: 'HOST', value: '0.0.0.0' }
@@ -226,6 +230,7 @@ resource mcp 'Microsoft.App/containerApps@2025-07-01' = {
             { name: 'AUTH_MODE', value: 'entra' }
             { name: 'ENTRA_TENANT_ID', value: tenant().tenantId }
             { name: 'ENTRA_CLIENT_ID', value: entraClientId }
+            { name: 'ENTRA_API_URI', value: entraApiUri }
             { name: 'DMS_BASE_URL', value: 'http://${dmsName}' }
             { name: 'DMS_API_KEY', secretRef: 'dms-api-key' }
             { name: 'PUBLIC_BASE_URL', value: 'https://${mcpName}.${env.properties.defaultDomain}' }

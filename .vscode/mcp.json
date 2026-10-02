@@ -11,11 +11,13 @@
     "dealer-local": {
       "type": "http",
       "url": "http://127.0.0.1:8080/mcp",
-      "headers": { "Authorization": "Bearer ${input:dealer-local-token}" }
+      "headers": {
+        "Authorization": "Bearer ${input:dealer-local-token}"
+      }
     },
     "dealer-cloud": {
       "type": "http",
-      "url": "https://set-by-azd-postprovision.example/mcp"
+      "url": "https://ca-mcp-mcprehearse.yellowdesert-1d8bdd6e.canadacentral.azurecontainerapps.io/mcp"
     }
   }
 }

@@ -6,3 +6,8 @@ tests
 infra
 **/__pycache__
 *.pyc
+.azure
+workshop
+docs
+.github
+.vscode

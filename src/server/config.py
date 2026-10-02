@@ -20,6 +20,7 @@ class Settings:
     public_base_url: str
     entra_tenant_id: str | None = None
     entra_client_id: str | None = None
+    entra_api_uri: str | None = None  # Application ID URI; scopes are <uri>/dms.read
     local_issuer: str = "https://dev.local/dealer-mcp"
     local_audience: str = "api://dealer-mcp-dev"
     local_public_key_path: str = ".dev/jwt_public.pem"
@@ -44,6 +45,7 @@ class Settings:
             public_base_url=os.environ.get("PUBLIC_BASE_URL", "http://127.0.0.1:8080"),
             entra_tenant_id=os.environ.get("ENTRA_TENANT_ID"),
             entra_client_id=os.environ.get("ENTRA_CLIENT_ID"),
+            entra_api_uri=os.environ.get("ENTRA_API_URI"),
             local_public_key_path=os.environ.get("LOCAL_JWT_PUBLIC_KEY", ".dev/jwt_public.pem"),
             discount_limit=float(os.environ.get("DISCOUNT_LIMIT", "500")),
         )

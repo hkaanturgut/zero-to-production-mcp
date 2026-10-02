@@ -13,11 +13,13 @@ for i in $(seq 1 30); do
 done
 curl -fsS "$BASE/healthz" | grep -q '"ok"' || { echo "healthz failed"; exit 1; }
 
-HDRS=$(curl -s -o /dev/null -D - -X POST "$MCP_URL" \
+HDRS_FILE=$(mktemp)
+STATUS=$(curl -s -o /dev/null -D "$HDRS_FILE" -w '%{http_code}' -X POST "$MCP_URL" \
   -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}')
-echo "$HDRS" | head -1 | grep -q " 401" || { echo "expected 401 for anonymous call"; exit 1; }
-echo "$HDRS" | grep -qi 'www-authenticate:.*resource_metadata=' || { echo "missing resource_metadata"; exit 1; }
+[ "$STATUS" = "401" ] || { echo "expected 401 for anonymous call, got $STATUS"; exit 1; }
+grep -qi 'www-authenticate:.*resource_metadata=' "$HDRS_FILE" || { echo "missing resource_metadata"; exit 1; }
+rm -f "$HDRS_FILE"
 
 PRM=$(curl -fsS "$BASE/.well-known/oauth-protected-resource/mcp")
 echo "$PRM" | grep -q 'authorization_servers' || { echo "bad PRM: $PRM"; exit 1; }

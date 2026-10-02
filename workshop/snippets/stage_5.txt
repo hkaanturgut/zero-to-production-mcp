@@ -2,12 +2,18 @@
 
 # ---- ADD after: """
 import asyncio
+import logging
 
 # ---- ADD after: from fastmcp.server.middleware import AuthMiddleware
 from fastmcp.server.middleware.rate_limiting import RateLimitingMiddleware
 
 # ---- ADD after: from server.domain.pricing import all_in_quote  # the company's existi
 from server.middleware import AuditMiddleware, caller_key
+
+# ---- ADD after: )
+# One JSON audit line per tool call on stdout (Container Apps ships it to Log Analytics).
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+
 
 # ---- ADD after: middleware=[
         AuditMiddleware(),
