@@ -158,7 +158,7 @@ def register(mcp: FastMCP, deps: Deps) -> None:
                 "Ask a manager to apply it. The assistant cannot approve it for you."
             )
         if decision.needs_confirmation:
-            ask = confirmation(
+            ask = await confirmation(
                 ctx,
                 message=f"Apply a ${amount:,.2f} discount to {stock_number}? Reason: {reason}",
                 state={

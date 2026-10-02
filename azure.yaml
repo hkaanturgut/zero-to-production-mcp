@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+name: mcp-dealer-assistant
+metadata:
+  template: mcp-dealer-assistant
+infra:
+  provider: bicep
+  path: infra
+services:
+  mcp:
+    project: .
+    language: python
+    host: containerapp
+    docker:
+      path: Dockerfile
+      remoteBuild: true   # build in ACR: no local Docker needed, small upload on venue Wi-Fi
+      buildArgs:
+        - PYTHON_IMAGE=${AZURE_CONTAINER_REGISTRY_ENDPOINT}/base/python:3.11-slim
+  dms:
+    project: .
+    language: python
+    host: containerapp
+    docker:
+      path: Dockerfile
+      remoteBuild: true
+      buildArgs:
+        - PYTHON_IMAGE=${AZURE_CONTAINER_REGISTRY_ENDPOINT}/base/python:3.11-slim
+hooks:
+  preprovision:
+    posix:
+      shell: sh
+      run: ./scripts/azd-preprovision.sh
+    windows:
+      shell: pwsh
+      run: ./scripts/azd-preprovision.ps1
+  postprovision:
+    posix:
+      shell: sh
+      run: ./scripts/azd-postprovision.sh
+    windows:
+      shell: pwsh
+      run: ./scripts/azd-postprovision.ps1

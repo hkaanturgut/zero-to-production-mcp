@@ -1,0 +1,36 @@
+# Stage 5 snippets: blocks to add or replace, in file order.
+
+# ---- ADD after: """
+import asyncio
+
+# ---- ADD after: from fastmcp.server.middleware import AuthMiddleware
+from fastmcp.server.middleware.rate_limiting import RateLimitingMiddleware
+
+# ---- ADD after: from server.domain.pricing import all_in_quote  # the company's existi
+from server.middleware import AuditMiddleware, caller_key
+
+# ---- ADD after: middleware=[
+        AuditMiddleware(),
+        RateLimitingMiddleware(
+            max_requests_per_second=5, burst_capacity=20, get_client_id=caller_key
+        ),
+
+# ---- REPLACE the lines below this anchor with: async def call_dms(method: str, path: str, **kwargs) -> dict:
+    """Every backend call: hard deadline, retries for reads only, clean errors."""
+    attempts = 3 if method == "GET" else 1  # never blindly retry a write
+    for attempt in range(attempts):
+        try:
+            async with asyncio.timeout(1.5):
+                resp = await dms.request(method, path, **kwargs)
+            if resp.status_code < 500:
+                break
+        except (httpx.TransportError, TimeoutError):
+            pass
+        if attempt + 1 < attempts:
+            await asyncio.sleep(0.2 * 2**attempt)
+    else:
+        raise ToolError("The dealer system is not responding. Try again shortly (retryable).")
+    if resp.status_code == 404:
+        raise ToolError("Not found. Use search_inventory to find valid stock numbers.")
+    if resp.status_code == 409:
+        raise ToolError(resp.json()["detail"])

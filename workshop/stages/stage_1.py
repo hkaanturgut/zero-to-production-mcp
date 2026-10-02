@@ -1,0 +1,34 @@
+"""Dealer sales assistant: an MCP server built live at MCP Dev Summit Toronto 2026."""
+
+import os
+
+import httpx
+from fastmcp import FastMCP
+
+DMS_URL = os.environ.get("DMS_BASE_URL", "http://127.0.0.1:8081")
+DMS_KEY = os.environ["DMS_API_KEY"]
+
+mcp = FastMCP("dealer-sales-assistant")
+dms = httpx.AsyncClient(base_url=DMS_URL, headers={"X-API-Key": DMS_KEY})
+
+
+async def call_dms(method: str, path: str, **kwargs) -> dict:
+    resp = await dms.request(method, path, **kwargs)
+    resp.raise_for_status()
+    return resp.json()
+
+
+@mcp.tool
+async def search_inventory(make: str | None = None, max_price: int | None = None) -> dict:
+    """Search cars on the lot."""
+    params = {"make": make, "max_price": max_price}
+    return await call_dms("GET", "/vehicles", params={k: v for k, v in params.items() if v})
+
+
+@mcp.tool
+async def get_vehicle(stock_number: str) -> dict:
+    """Get one car."""
+    return await call_dms("GET", f"/vehicles/{stock_number}")
+
+
+app = mcp.http_app(path="/mcp")

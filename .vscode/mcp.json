@@ -1,0 +1,21 @@
+{
+  "inputs": [
+    {
+      "id": "dealer-local-token",
+      "type": "promptString",
+      "description": "Local rehearsal token: uv run dev-token salesperson (or manager)",
+      "password": true
+    }
+  ],
+  "servers": {
+    "dealer-local": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp",
+      "headers": { "Authorization": "Bearer ${input:dealer-local-token}" }
+    },
+    "dealer-cloud": {
+      "type": "http",
+      "url": "https://set-by-azd-postprovision.example/mcp"
+    }
+  }
+}

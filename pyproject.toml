@@ -20,6 +20,7 @@ dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.6"]
 [project.scripts]
 dms = "dms.app:main"
 server = "server.app:main"
+live-server = "live.server:main"
 dev-token = "server.devtoken:main"
 
 [build-system]
@@ -27,7 +28,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/dms", "src/server"]
+packages = ["src/dms", "src/server", "src/live"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -45,3 +46,5 @@ ignore = ["S101"]
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S105", "S106"]
 "src/dms/seed.py" = ["S311"]
+"workshop/**" = ["S", "E501"]
+"src/live/*" = ["S", "E501"]

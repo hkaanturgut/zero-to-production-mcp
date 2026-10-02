@@ -113,13 +113,14 @@ async def test_mark_sold_requires_manager_and_confirmation(connect):
     assert r["status"] == "sold"
 
 
-def test_confirmation_rejects_state_tampering():
+async def test_confirmation_rejects_state_tampering():
     """If arguments change between the question and the answer, nothing happens."""
     ctx = SimpleNamespace(
+        request_context=SimpleNamespace(protocol_version="2026-07-28"),
         input_responses={"confirm": SimpleNamespace(action="accept", content={"confirm": True})},
         request_state=json.dumps({"tool": "apply_discount", "stock": "TBA-1001", "amount": 600}),
     )
     with pytest.raises(ToolError, match="changed after it was confirmed"):
-        confirmation(
+        await confirmation(
             ctx, message="x", state={"tool": "apply_discount", "stock": "TBA-1001", "amount": 4000}
         )

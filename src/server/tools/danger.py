@@ -27,7 +27,7 @@ def register(mcp: FastMCP, deps: Deps) -> None:
         """Mark a car as sold and remove it from the lot. Manager only; asks for confirmation."""
         caller = current_caller()
         v = await call_backend(lambda: deps.backend.get_vehicle(stock_number))
-        ask = confirmation(
+        ask = await confirmation(
             ctx,
             message=f"Mark {v['year']} {v['make']} {v['model']} ({stock_number}) as SOLD?",
             state={"tool": "mark_vehicle_sold", "stock": stock_number, "by": caller.id},
@@ -43,7 +43,7 @@ def register(mcp: FastMCP, deps: Deps) -> None:
         Manager only; always asks for confirmation.
         """
         caller = current_caller()
-        ask = confirmation(
+        ask = await confirmation(
             ctx,
             message=f"Delete lead {lead_id}? This removes it from every salesperson's list.",
             state={"tool": "delete_lead", "lead": lead_id, "by": caller.id},

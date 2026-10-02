@@ -58,8 +58,8 @@ def test_protected_resource_metadata(server):
     assert r.status_code == 200
     body = r.json()
     assert body["authorization_servers"] == ["https://dev.local/dealer-mcp"]
-    # Least privilege: only the baseline scope is advertised up front.
-    assert body["scopes_supported"] == ["dms.read"]
+    # The salesperson baseline only: manager rights are never requestable.
+    assert body["scopes_supported"] == ["dms.read", "dms.write"]
 
 
 def test_healthz_is_public(server):

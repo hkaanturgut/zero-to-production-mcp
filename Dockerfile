@@ -19,5 +19,9 @@ ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 HOST=0.0.0.0 PORT=8080
 USER 10001
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s CMD python -c "import urllib.request,os; urllib.request.urlopen(f'http://127.0.0.1:{os.environ[\"PORT\"]}/healthz')"
-# Default: the MCP server. The DMS container overrides the command with `dms`.
-CMD ["server"]
+# APP_ENTRY picks the entry point of this one image:
+#   live-server  the file built on stage (src/live/server.py)
+#   server       the full reference build (src/server)
+#   dms          the mock dealer system
+ENV APP_ENTRY=server
+CMD ["sh", "-c", "exec \"$APP_ENTRY\""]

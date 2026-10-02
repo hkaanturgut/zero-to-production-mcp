@@ -5,9 +5,5 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .ruff_cache/
-# Terraform
-**/.terraform/*
-*.tfstate
-*.tfstate.*
-*.tfplan
-crash.log
+# azd environments (hold generated secrets)
+.azure/
