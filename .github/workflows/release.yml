@@ -121,7 +121,7 @@ jobs:
           echo "registry_id=$(az acr show --name "${acr%%.*}" --query id -o tsv)" >> "$GITHUB_OUTPUT"
       - name: Scan image (HIGH and CRITICAL fail the release)
         if: steps.image.outputs.image
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ steps.image.outputs.image }}
           severity: CRITICAL,HIGH
