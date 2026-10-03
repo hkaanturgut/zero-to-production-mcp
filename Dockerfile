@@ -12,7 +12,12 @@ COPY src ./src
 RUN uv sync --frozen --no-dev --extra otel
 
 FROM ${PYTHON_IMAGE}
-RUN useradd --uid 10001 --create-home app
+# Patch OS packages and drop the base image's setuptools/wheel (the app runs
+# from /app/.venv and never uses them), so the scan gate passes on a stale base.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/* \
+ && pip uninstall -y -q setuptools wheel \
+ && useradd --uid 10001 --create-home app
 WORKDIR /app
 COPY --from=build --chown=app:app /app /app
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 HOST=0.0.0.0 PORT=8080
