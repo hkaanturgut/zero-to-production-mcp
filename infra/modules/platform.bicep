@@ -3,6 +3,7 @@ param environmentName string
 param location string
 param tags object
 param principalId string
+param principalType string
 param entraClientId string
 @description('Application ID URI of the server app registration: prefix of the advertised scopes.')
 param entraApiUri string
@@ -110,6 +111,7 @@ resource kvSecretsUserDeployer 'Microsoft.Authorization/roleAssignments@2022-04-
   properties: {
     roleDefinitionId: kvSecretsUserRoleId
     principalId: principalId
+    principalType: principalType
   }
 }
 

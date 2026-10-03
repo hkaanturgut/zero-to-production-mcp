@@ -15,6 +15,7 @@ azd env new "$AZURE_ENV_NAME" --subscription "$AZURE_SUBSCRIPTION_ID" --location
   || azd env select "$AZURE_ENV_NAME"
 azd env set DMS_API_KEY "$DMS_API_KEY" >/dev/null
 azd env set ASSIGN_MANAGER_ROLE false >/dev/null
+azd env set AZURE_PRINCIPAL_TYPE ServicePrincipal >/dev/null
 
 rg="rg-$AZURE_ENV_NAME"
 first=false

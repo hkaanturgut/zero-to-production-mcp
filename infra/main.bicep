@@ -15,6 +15,10 @@ param location string = 'canadacentral'
 @description('Object ID of whoever runs azd (set by azd). Gets Key Vault access for troubleshooting.')
 param principalId string = ''
 
+@description('User for a person running azd, ServicePrincipal in CI. Avoids PrincipalNotFound on a fresh identity.')
+@allowed(['User', 'ServicePrincipal'])
+param principalType string = 'User'
+
 @description('Give the deploying user the sales-manager app role (shows the confirmation flow in VS Code).')
 param assignManagerRoleToDeployer bool = false
 
@@ -62,6 +66,7 @@ module platform 'modules/platform.bicep' = {
     location: location
     tags: tags
     principalId: principalId
+    principalType: principalType
     dmsApiKey: dmsApiKey
     mcpCommand: mcpCommand
     mcpExists: mcpExists
