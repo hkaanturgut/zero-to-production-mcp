@@ -13,6 +13,8 @@ Bicep + azd path to Azure, with GitHub Actions for CI/CD.
 
 All cars, customers and leads are synthetic.
 
+![Solution architecture](docs/architecture.svg)
+
 ## Quick start (offline, about 2 minutes)
 
 Requires [uv](https://docs.astral.sh/uv/) and Python 3.11+.
