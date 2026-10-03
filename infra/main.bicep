@@ -1,6 +1,7 @@
 // azd entry point. One command builds the whole rehearsal environment:
 //   azd up            provision + deploy
 //   azd deploy mcp    ship new server code only (what happens on stage)
+//   CI owns mcpdev and mcpshow: never run azd provision on them from a laptop
 //   azd down --purge  delete everything, including the soft-deleted Key Vault
 targetScope = 'subscription'
 
