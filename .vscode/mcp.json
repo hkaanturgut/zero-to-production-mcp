@@ -17,6 +17,10 @@
     },
     "dealer-cloud": {
       "type": "http",
+      "url": "https://ca-mcp-mcpshow.happypebble-d6f825ba.canadacentral.azurecontainerapps.io/mcp"
+    },
+    "dealer-spare": {
+      "type": "http",
       "url": "https://ca-mcp-mcprehearse.yellowdesert-1d8bdd6e.canadacentral.azurecontainerapps.io/mcp"
     }
   }
