@@ -2,7 +2,7 @@
 
 Secrets (the DMS API key) come from the environment only. In Azure the
 Container App injects them from Key Vault through its managed identity, so they
-never appear in code, images, Terraform state outputs or tool results.
+never appear in code, images, Bicep deployment outputs or tool results.
 """
 
 from __future__ import annotations

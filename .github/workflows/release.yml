@@ -1,4 +1,4 @@
-# Push to main -> dev (automatic) -> prod (gated).
+# Push to main -> dev (automatic) -> prod (manual run, or on push behind a reviewer rule).
 #
 #   infra/ or azure.yaml changed   -> azd provision
 #   src/, Dockerfile, uv.lock ...  -> build once, scan, push to the dev ACR, deploy;
