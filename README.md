@@ -1,3 +1,5 @@
+[![release](https://github.com/hkaanturgut/zero-to-production-mcp/actions/workflows/release.yml/badge.svg)](https://github.com/hkaanturgut/zero-to-production-mcp/actions/workflows/release.yml)
+
 # Dealer Sales Assistant: a production-grade MCP server
 
 Workshop companion for **"From Zero to Production MCP Server: Turn Any API Into an Agent Tool"**
@@ -37,7 +39,7 @@ npx @modelcontextprotocol/inspector --cli http://127.0.0.1:8080/mcp \
 | --- | --- | --- |
 | `readonly` | user, `dms.read` | 5 read tools |
 | `salesperson` | user, `dms.read dms.write` | 9 tools, discounts up to $500 |
-| `agent` | app-only, roles `dms.read dms.write` (like a Foundry agent) | 9 tools, never manager |
+| `agent` | app-only, roles `dms.agent.read dms.agent.write` (like a Foundry agent) | 9 tools, never manager |
 | `manager` | user, adds `dms.manager` | 11 tools, big discounts with confirmation |
 
 Local tokens are signed by a key in `.dev/` (git-ignored) and only work with `AUTH_MODE=local`.
@@ -46,7 +48,7 @@ In Azure the server runs with `AUTH_MODE=entra` and trusts only Microsoft Entra 
 ## Run the tests
 
 ```bash
-uv run pytest -q          # 75 tests: auth, policy, confirmation, resilience, secrets, every live stage
+uv run pytest -q          # 73 tests: auth, policy, confirmation, resilience, secrets, every live stage
 uv run ruff check src tests
 ```
 
@@ -95,9 +97,30 @@ and an Entra app registration with 2 delegated scopes, 3 app roles and VS Code p
 **Connect VS Code:** put the `MCP_URL` in `.vscode/mcp.json` as an `http` server, then
 *MCP: List Servers > Start*. VS Code signs you in with Microsoft automatically.
 
-**CI/CD:** `azd pipeline config` creates the GitHub OIDC identity and variables. Add a
-`DMS_API_KEY` secret per GitHub Environment, and required reviewers on `prod`. The deploy
-identity also needs Microsoft Graph permission to manage the app registration.
+## CI/CD
+
+Two GitHub Actions workflows (details in [docs/HLD.md](docs/HLD.md#cicd)):
+
+- `ci.yml` on pull requests: ruff + pytest, Docker build + Trivy scan, Bicep build + lint,
+  and an `azd provision --preview` what-if on dev, posted to the job summary.
+- `release.yml` on push to `main` or manual run: provisions only when infra changed, builds
+  the image once, scans it, deploys to dev, smoke-tests, then promotes the same tag and
+  digest to prod with `az acr import` (no rebuild).
+
+Prod runs on push only if the repo variable `PROD_ON_PUSH` is `true`. Otherwise trigger it:
+
+```bash
+gh workflow run release.yml -f scope=all -f prod=true
+```
+
+| Setting | Level | Value |
+| --- | --- | --- |
+| `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_LOCATION` | Repo variables | CI app registration (OIDC), target subscription and region |
+| `AZURE_ENV_NAME` | Environment variable (`dev`, `prod`) | azd env name: `mcpdev`, `mcpshow` |
+| `DMS_API_KEY` | Environment secret (`dev`, `prod`) | Service key, written to Key Vault |
+
+Don't run `azd provision` locally on these two envs: the preprovision hook would rotate
+`DMS_API_KEY` away from the GitHub secret.
 
 ## Layout
 
@@ -108,6 +131,6 @@ tests/          pytest suite over real HTTP with real JWTs
 infra/          main.bicep + modules (platform, entra, foundry), azd parameters
 workshop/       stage files 0-5 and paste snippets for the live build
 src/live/       the file you build on stage (equals workshop/stages/stage_5.py on main)
-.github/        ci.yml (PR), deploy.yml (main, azd, dev then prod)
+.github/        ci.yml (PR checks + what-if), release.yml (main: dev, then prod)
 docs/           HLD pointer, Foundry agent setup, production checklist
 ```
