@@ -34,4 +34,4 @@ Each item is implemented in this repo and covered by a test or a pipeline gate.
 - [ ] One audit event per call with correlation ID; argument names only.
 - [ ] Per-caller rate limit.
 - [ ] Stateless server (2026-07-28), min 1 replica, health probes.
-- [ ] Build once, scan, promote the same image; prod behind an approval gate.
+- [ ] Build once, scan, promote the same image; prod only on a deliberate trigger (reviewer gate, or a manual run on plans without one).
