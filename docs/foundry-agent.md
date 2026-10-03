@@ -6,8 +6,9 @@ configuration, set up once per environment.
 
 ## 1. Give the agent an identity the server trusts
 
-The server accepts app-only tokens whose `roles` claim contains `dms.read` and
-`dms.write`. It never grants `dms.manager` to an application.
+The server accepts app-only tokens whose `roles` claim contains the app roles
+`dms.agent.read` and `dms.agent.write` (mapped to the `dms.read` and `dms.write`
+permissions). `dms.manager` is a User-only role, so an application never gets it.
 
 * **Project managed identity** (all agents in the project share it):
   `azd env set AGENT_PRINCIPAL_IDS "$(azd env get-value FOUNDRY_PROJECT_PRINCIPAL_ID)" && azd provision`
