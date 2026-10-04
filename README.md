@@ -15,7 +15,7 @@ All cars, customers and leads are synthetic.
 
 **Contents**
 
-1. [MCP in five minutes](#1-mcp-in-five-minutes)
+1. [MCP in five minutes](#1-mcp-in-five-minutes) · [Why MCP instead of a plain REST API?](#why-mcp-instead-of-a-plain-rest-api)
 2. [Architecture](#2-architecture)
 3. [The tools](#3-the-tools)
 4. [Security](#4-security)
@@ -48,9 +48,46 @@ A server can offer three kinds of capability:
 - **Resources**: data the host can read, such as files or records.
 - **Prompts**: reusable prompt templates the user picks.
 
-**Why MCP instead of a plain REST API?** Write the integration once and every MCP host can use
-it. The model discovers tools, their input and output schemas, and their descriptions at
-runtime. Auth, consent and confirmation are part of the protocol, not left to each app.
+### Why MCP instead of a plain REST API?
+
+**Short answer: MCP doesn't replace your REST API. It sits in front of it.** The dealer system in this
+repo is a plain REST API (`src/dms`), and it stays that way. The MCP server (`src/server`) is a thin layer
+that turns it into something an AI agent can use safely. REST is how programs talk to your system;
+MCP is how AI agents talk to it.
+
+**The problem MCP solves.** A REST API is designed for developers who read the docs, write the client
+code and decide when to call each endpoint. An agent has none of that: the model decides at runtime
+what to call, with what arguments, and it can be tricked by the data it reads. Handing it your REST API
+directly leaves three gaps:
+
+1. **Every AI app needs its own integration.** VS Code, Claude, a Foundry agent and Copilot Studio each
+   want tools described their own way, with their own auth glue. N apps × M APIs = N×M integrations.
+   With MCP you build one server per API, and every MCP host can use it: N + M.
+2. **The API is shaped for code, not for a model.** Raw endpoints return everything (here: the VIN,
+   internal status and discount notes, a list price without fees) and leave the business rules to the caller. A model
+   will happily do the fee math itself, and get it wrong.
+3. **The API trusts its caller.** The DMS uses one shared `X-API-Key`. Giving that key to an agent
+   means every agent, and anyone who can talk to it, has full access, and you can't tell who did what.
+
+**Side by side**, with this repo's dealer system:
+
+| Concern | Agent calls the REST API directly | Agent calls the MCP server |
+| --- | --- | --- |
+| How the agent learns what exists | You paste endpoint docs or an OpenAPI file into each app | `tools/list`: names, descriptions written for the model, input and output schemas, at runtime |
+| What a "search" returns | `GET /vehicles`: every field, VIN included, prices before fees | `search_inventory`: 10 results, only what the model needs; `quote_price` adds every fee in code |
+| Who the caller is | Whoever holds the shared `X-API-Key` | The person or agent in the Entra token (`oid`), checked on every call |
+| What the caller may do | Everything the key allows | Only the tools their permissions allow; the rest are hidden from `tools/list` |
+| Business rules | In the prompt, hoping the model follows them | In code: the 15% cap and $500 limit hold even against prompt injection |
+| Risky actions | The model just calls `POST /discount` | `InputRequiredResult`: a human confirms in the host's UI first |
+| Errors | HTTP status codes the model may not understand | `isError` results in plain language the model can act on ("needs a sales manager") |
+| Secrets | The API key travels to every agent | The key stays in Key Vault; agents only ever hold their own short-lived token |
+| Audit | Access logs show one shared key | One line per tool call: who, which tool, outcome, correlation ID |
+| Signing in | Custom per app | Standard OAuth 2.1: the 401 tells any MCP client where to sign in (Protected Resource Metadata) |
+
+**When plain REST is enough.** One application, your own code calling the API, prompts and tools you
+control, nothing to reuse: function calling against your API is fine, and MCP adds little. MCP pays off
+when several AI hosts or agents need the same system, when callers have different permissions, or when
+you need to prove who did what.
 
 ### What changed in spec 2026-07-28
 
