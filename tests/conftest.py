@@ -27,7 +27,7 @@ os.environ["DMS_API_KEY"] = DMS_KEY
 from dms import app as dms_app  # noqa: E402
 from dms.seed import build_store  # noqa: E402
 from server import devtoken  # noqa: E402
-from server.app import build_server  # noqa: E402
+from server.app import build_app  # noqa: E402
 from server.backend.mock_client import CircuitBreaker, MockDmsClient  # noqa: E402
 from server.config import Settings  # noqa: E402
 
@@ -73,7 +73,7 @@ def _serve(settings: Settings, **backend_kw) -> Running:
         transport=httpx.ASGITransport(app=dms_app.app),
         **backend_kw,
     )
-    app = build_server(settings, backend).http_app(path="/mcp")
+    app = build_app(settings, backend)
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     threading.Thread(target=server.run, daemon=True).start()
     for _ in range(100):
