@@ -1,8 +1,9 @@
 // azd entry point. One command builds the whole rehearsal environment:
 //   azd up            provision + deploy
 //   azd deploy mcp    ship new server code only (what happens on stage)
-//   CI owns mcpdev and mcpshow: never run azd provision on them from a laptop
 //   azd down --purge  delete everything, including the soft-deleted Key Vault
+// CI owns mcpdev and mcpshow: never run azd provision on them from a laptop
+// (the preprovision hook would rotate DMS_API_KEY away from the GitHub secret).
 targetScope = 'subscription'
 
 @minLength(1)
