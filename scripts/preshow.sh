@@ -24,6 +24,10 @@ MCP_URL=$(azd env get-value MCP_URL -e "$ENV" 2>/dev/null)
 API=$(azd env get-value ENTRA_API_URI -e "$ENV" 2>/dev/null)
 
 step "Environments"
+APIM=$(azd env get-value APIM_NAME -e "$ENV" 2>/dev/null)
+apim_id=$(az apim show -g "$RG" -n "$APIM" --query id -o tsv 2>/dev/null)
+health=$(az rest --method get --url "https://management.azure.com${apim_id}/providers/Microsoft.ResourceHealth/availabilityStatuses/current?api-version=2024-02-01" --query properties.availabilityState -o tsv 2>/dev/null)
+[ "$health" = "Available" ] && ok "API Management $APIM available" || bad "API Management $APIM is '$health' (Developer tier upgrades take ~25 min; use dealer-spare)"
 ./scripts/smoke.sh "$MCP_URL" >/dev/null 2>&1 && ok "$ENV smoke" || bad "$ENV smoke ($MCP_URL)"
 ./scripts/smoke.sh "$SPARE" >/dev/null 2>&1 && ok "hot spare smoke" || bad "hot spare smoke"
 grep -q "${MCP_URL%/mcp}" .vscode/mcp.json && ok ".vscode/mcp.json dealer-cloud = $ENV" || bad "dealer-cloud does not point at $ENV"
