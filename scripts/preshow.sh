@@ -17,9 +17,9 @@ step() { printf '\n== %s\n' "$1"; }
 step "Tools and sign-in"
 v=$(azd version 2>/dev/null | sed -n 's/^azd version \([0-9.]*\).*/\1/p')
 [ "$(printf '%s\n1.35.0\n' "$v" | sort -V | head -1)" = "1.35.0" ] && ok "azd $v" || bad "azd $v (need 1.35+: brew uninstall azd && brew install azure/azd/azd)"
-sub=$(az account show --query id -o tsv 2>/dev/null)
-[ "$sub" = "fc4b39c5-adad-4de0-a91a-06dd08aa2e8f" ] && ok "az on the right subscription" || bad "az subscription is '$sub' (run: az login)"
 azd env select "$ENV" >/dev/null 2>&1 && ok "azd default env = $ENV" || bad "azd env $ENV missing (azd env new $ENV && azd env refresh -e $ENV)"
+sub=$(az account show --query id -o tsv 2>/dev/null)
+[ "$sub" = "$(azd env get-value AZURE_SUBSCRIPTION_ID -e "$ENV" 2>/dev/null)" ] && ok "az on the $ENV subscription" || bad "az subscription is '$sub' (run: az login)"
 MCP_URL=$(azd env get-value MCP_URL -e "$ENV" 2>/dev/null)
 API=$(azd env get-value ENTRA_API_URI -e "$ENV" 2>/dev/null)
 
