@@ -23,10 +23,9 @@ All cars, customers and leads are synthetic.
 6. [Operations and maintenance](#6-operations-and-maintenance)
 7. [Scalability and reliability](#7-scalability-and-reliability)
 8. [Observability and traceability](#8-observability-and-traceability)
-9. [Known gaps and hardening backlog](#9-known-gaps-and-hardening-backlog)
-10. [Enterprise questions, answered](#10-enterprise-questions-answered)
-11. [AI engineering lessons](#11-ai-engineering-lessons)
-12. [Quick start](#12-quick-start-offline-about-2-minutes) · [Tests](#13-run-the-tests) · [Deploy](#14-deploy-to-azure-bicep--azd) · [CI/CD](#15-cicd) · [Connect a client](#16-connect-a-client) · [Layout](#17-layout)
+9. [Enterprise questions, answered](#9-enterprise-questions-answered)
+10. [AI engineering lessons](#10-ai-engineering-lessons)
+11. [Quick start](#11-quick-start-offline-about-2-minutes) · [Tests](#12-run-the-tests) · [Deploy](#13-deploy-to-azure-bicep--azd) · [CI/CD](#14-cicd) · [Connect a client](#15-connect-a-client) · [Layout](#16-layout)
 
 ---
 
@@ -108,25 +107,27 @@ classic `ctx.elicit`. `tests/test_legacy_clients.py` covers both eras.
 
 ## 2. Architecture
 
-![Solution architecture: agent clients sign in with Microsoft Entra ID and call the MCP server on Azure Container Apps, which calls an internal dealer API with a key from Key Vault and audits every call to Log Analytics](docs/architecture.svg)
+![Solution architecture: agent clients sign in with Microsoft Entra ID and call the MCP server through API Management; the server runs on Azure Container Apps in a private network, calls an internal dealer API with a key from a private Key Vault and audits every call to Log Analytics](docs/architecture.svg)
 
 One request, end to end:
 
 1. **Discover.** A call without a token gets 401 with `resource_metadata`, pointing to the
    [Protected Resource Metadata](https://www.rfc-editor.org/rfc/rfc9728.html), which names Entra and the scopes.
 2. **Sign in.** The client gets a v2 token from Entra: delegated scopes for people, app roles for agents.
-3. **Call.** `POST /mcp` with the bearer token. Stateless, so any replica can answer.
+3. **Call.** `POST /mcp` with the bearer token, through API Management: the only public entry, which applies one rate limit per caller across all replicas. Stateless, so any replica can answer.
 4. **Verify.** Signature, issuer and audience are checked; `scp` and `roles` merge into one permission set, and tools the caller can't use are hidden.
 5. **Act.** Business rules run in code, then the server calls the internal DMS with its API key. The caller's token never goes downstream.
-6. **Secret.** `DMS_API_KEY` is a Key Vault reference resolved by a user-assigned managed identity.
+6. **Secret.** `DMS_API_KEY` is a Key Vault reference resolved by a user-assigned managed identity, over a private endpoint.
 7. **Audit.** One JSON line per tool call (correlation ID, tool, argument names, caller) lands in Log Analytics.
 
 | Component | Azure resource | Notes |
 | --- | --- | --- |
-| MCP server | Container App `ca-mcp-<env>` | Public HTTPS, `/mcp` and `/healthz`, 1 to 3 replicas |
+| Front door | API Management `apim-<env>-*` (Developer tier) | The public MCP URL; per-caller rate limit across replicas; static IP |
+| MCP server | Container App `ca-mcp-<env>` | `/mcp` and `/healthz`, accepts only API Management's IP, 1 to 3 replicas |
 | Dealer API (mock DMS) | Container App `ca-dms-<env>` | Internal ingress only (404 from the internet), exactly 1 replica (in-memory data) |
-| Image | Azure Container Registry | One image, two entry points (`APP_ENTRY`); admin user off, pull by managed identity; base image mirrored in |
-| Secret | Azure Key Vault (RBAC mode) | `DMS_API_KEY`, read through a Container Apps Key Vault reference |
+| Image | Azure Container Registry (Premium) | One image, two entry points (`APP_ENTRY`); admin user off; apps pull over a private endpoint; public endpoint denied except the region's ACR build service (remote builds) and a CI runner while it pushes |
+| Secret | Azure Key Vault (RBAC mode) | `DMS_API_KEY`; public network access off, read over a private endpoint |
+| Network | Virtual network + private DNS | Container Apps environment in a delegated subnet; private endpoints for Key Vault and ACR |
 | Identity | User-assigned managed identity | Key Vault Secrets User, AcrPull |
 | Telemetry | Log Analytics + Application Insights | Console logs and audit lines; optional OpenTelemetry |
 | Sign-in | Microsoft Entra app `dealer-mcp-<env>` | 2 scopes, 3 app roles, VS Code and Azure CLI pre-authorized |
@@ -192,6 +193,8 @@ Each row is a practice, where this repo implements it, and the official source b
 | **Minimal data out** | Phone shows last 4 digits, email first letter + domain, names shortened (`domain/masking.py`) | [Security best practices](https://modelcontextprotocol.io/docs/2026-07-28/tutorials/security/security_best_practices) (scope minimization) |
 | **Bind data to the caller** | Lead IDs are random; a salesperson can't read another salesperson's lead (`test_cannot_read_another_salespersons_lead`) | Same (state handle hijacking) |
 | **Private backend** | DMS has internal ingress only | [Container Apps ingress](https://learn.microsoft.com/en-us/azure/container-apps/ingress-overview) |
+| **One front door** | API Management is the only public entry; `ca-mcp` allows just its static IP, so the gateway's rate limit can't be bypassed | [APIM MCP servers](https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview), [Container Apps IP restrictions](https://learn.microsoft.com/en-us/azure/container-apps/ip-restrictions) |
+| **Private secrets and images** | Key Vault public access off; ACR pulled over a private endpoint, its public endpoint firewalled | [Key Vault network security](https://learn.microsoft.com/en-us/azure/key-vault/general/network-security), [ACR private endpoints](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-private-endpoints) |
 | **No secrets in CI** | GitHub OIDC federation; CI identity has Contributor, RBAC Admin limited to two roles, Graph rights only on apps it owns | [GitHub OIDC to Azure](https://learn.microsoft.com/en-us/azure/developer/github/connect-from-azure-openid-connect), [Workload identity federation](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust) |
 | **Supply chain** | Actions pinned (Trivy by commit SHA), packages locked (`uv.lock`), image scanned, HIGH/CRITICAL fail the release | [GitHub OIDC reference](https://docs.github.com/en/actions/reference/security/oidc) |
 
@@ -254,7 +257,7 @@ on the mock. Swap in a real DMS client without touching tool code.
 | **Retries** | Reads: 3 attempts, backoff `0.2 · 2^n` s plus jitter. Writes: 1 attempt. | A blind write retry can double a discount |
 | **Idempotency** | Writes carry `Idempotency-Key` = hash(caller, tool, arguments) | An agent retry is safe |
 | **Circuit breaker** | Opens after 5 failures, half-open after 30 s | Fail fast instead of piling up on a sick backend |
-| **Rate limit** | 5 requests/s per caller, burst 20 (keyed by token subject, not IP) | One runaway agent can't starve the rest |
+| **Rate limit** | API Management: 120 calls per minute per caller (`rate-limit-by-key` on the token's `oid`), for all replicas at once. The server adds 5 requests/s per caller, burst 20, per replica. | One runaway agent can't starve the rest, however many replicas run |
 | **Health** | `/healthz` probes | Container Apps restarts unhealthy replicas |
 
 Try it live: `./scripts/demo.sh chaos slow|errors|flaky|off` breaks the DMS on purpose.
@@ -299,25 +302,7 @@ Set `APPLICATIONINSIGHTS_CONNECTION_STRING` to add OpenTelemetry traces through
 
 ---
 
-## 9. Known gaps and hardening backlog
-
-Being honest about these is part of production readiness. None of them affects the workshop
-demo, which runs on a single replica. The stage build (`src/live`) stays as taught; the fixes live
-in the reference build (`src/server`), which you switch to with `MCP_COMMAND=server`.
-
-| Gap | Risk | Fix |
-| --- | --- | --- |
-| **Fixed in the reference build.** `requestState` was sealed with a per-process key (SDK default) | With more than one replica, a confirmation answered on a different replica fails closed (`Invalid or expired requestState`) | Set `REQUEST_STATE_KEYS` (comma-separated ring, first key seals; rotate as `new,old` then `new`). Store it in Key Vault like `DMS_API_KEY`. Tested in `test_hardening.py` with two replicas. |
-| Rate limit is in memory, per replica | With 3 replicas a caller gets up to 3× the limit | Enforce at a gateway ([API Management for MCP](https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview)) or use a shared store |
-| **Fixed in the reference build.** Origin validation was off (FastMCP default) | The [transport spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http) requires `Origin` validation against DNS rebinding | `build_app()` rejects foreign origins with 403; allowed list from `ALLOWED_ORIGINS` (default: `PUBLIC_BASE_URL`). Requests without `Origin` (IDEs, CLIs, agents) pass; Host checks stay at the ingress so health probes work. |
-| Azure CLI is pre-authorized on the Entra app | Handy for testing; broadens who can get a token without consent | Remove after the event (`infra/modules/entra.bicep`) |
-| Public endpoints for ACR and Key Vault | Larger attack surface | Private endpoints and VNet integration |
-| No reviewer gate on prod | GitHub Free plan | Paid plan: required reviewers on `prod`, branch protection with the 4 checks |
-| Mock DMS | Not a real system of record | Implement `DmsBackend` against the real API |
-
----
-
-## 10. Enterprise questions, answered
+## 9. Enterprise questions, answered
 
 **How do you stop prompt injection from making the agent do something bad?**
 You can't stop the model from reading malicious text, so don't rely on it. Limits are enforced
@@ -348,15 +333,21 @@ can explain to the user. Try `./scripts/demo.sh chaos errors`.
 
 **Can it scale?**
 The server is stateless (2026-07-28), so Container Apps scales replicas horizontally. Before going
-past one replica, set `REQUEST_STATE_KEYS` and move rate limiting to a gateway ([section 9](#9-known-gaps-and-hardening-backlog)).
+past one replica with the reference build, set `REQUEST_STATE_KEYS` so confirmations work on any replica. The rate limit already lives in API Management.
 
 **Where is the data, and what leaves the backend?**
 Canada Central. Tools return the minimum, and personal data is masked before the model sees it.
 
-**Should we put API Management in front?**
-For many servers, yes: central JWT validation, rate limits, IP filtering and one catalog.
-[APIM's MCP support](https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview)
-covers tools (not resources or prompts). This server still validates tokens itself (defence in depth).
+**Why API Management in front?**
+One public entry with one rate limit per caller across all replicas, plus a place for IP filtering
+and a catalog when you run many servers. [APIM's MCP support](https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview)
+covers tools (not resources or prompts). The server still validates every token itself (defence in depth).
+The demo uses the Developer tier (static IP, no SLA); use Premium or Premium v2 in production.
+
+**Is the network private?**
+The apps run in a virtual network. Key Vault has public access off and ACR is pulled over private
+endpoints. ACR's public endpoint stays on but denies everyone except the region's ACR build service,
+so remote builds keep working, and a CI runner only while it pushes (`scripts/acr-access.sh`).
 
 **How do clients register?**
 Known clients are pre-authorized on the Entra app (VS Code, Azure CLI). The spec's order is
@@ -365,14 +356,14 @@ See [client registration](https://modelcontextprotocol.io/specification/2026-07-
 
 **How do you ship changes safely?**
 PR checks (tests, image scan, Bicep lint, what-if), build once, promote the same digest, smoke
-tests per environment. See [section 15](#15-cicd).
+tests per environment. See [section 14](#14-cicd).
 
 **Do tool annotations protect us?**
 No. They're hints for the host's UI, and clients must treat them as untrusted. Server-side checks do the protecting.
 
 ---
 
-## 11. AI engineering lessons
+## 10. AI engineering lessons
 
 - **The model is a user, not a component.** Treat every tool call like an untrusted request from the internet.
 - **Put rules where the model can't reach them.** Policy, math and permissions belong in code.
@@ -384,7 +375,7 @@ No. They're hints for the host's UI, and clients must treat them as untrusted. S
 
 ---
 
-## 12. Quick start (offline, about 2 minutes)
+## 11. Quick start (offline, about 2 minutes)
 
 Requires [uv](https://docs.astral.sh/uv/) and Python 3.11+.
 
@@ -409,7 +400,7 @@ npx @modelcontextprotocol/inspector --cli http://127.0.0.1:8080/mcp \
 Local tokens are signed by a key in `.dev/` (git-ignored) and only work with `AUTH_MODE=local`.
 In Azure the server runs with `AUTH_MODE=entra` and trusts only Microsoft Entra ID.
 
-## 13. Run the tests
+## 12. Run the tests
 
 ```bash
 uv run pytest -q          # 76 tests: auth, policy, confirmation, resilience, secrets, hardening, every live stage
@@ -430,7 +421,7 @@ uv run ruff check src tests
 | `test_live_stages.py` | Every workshop stage file |
 | `test_hardening.py` | Foreign `Origin` rejected; confirmation across two replicas with and without a shared key |
 
-## 14. Deploy to Azure (Bicep + azd)
+## 13. Deploy to Azure (Bicep + azd)
 
 Requires [azd](https://aka.ms/azd) (1.35 or later) and the Azure CLI. Your account needs rights
 to create resource groups and app registrations.
@@ -438,8 +429,8 @@ to create resource groups and app registrations.
 ```bash
 azd auth login && az login
 azd env new mcpdev --location canadacentral
-azd up                       # provision (about 6 to 8 min) + build in ACR + deploy
-azd env get-value MCP_URL    # https://ca-mcp-mcpdev.<region>.azurecontainerapps.io/mcp
+azd up                       # provision (about 45 min: API Management) + build in ACR + deploy
+azd env get-value MCP_URL    # https://apim-mcpdev-<id>.azure-api.net/mcp
 ```
 
 | Command | When |
@@ -451,7 +442,7 @@ azd env get-value MCP_URL    # https://ca-mcp-mcpdev.<region>.azurecontainerapps
 | `azd env set DEPLOY_FOUNDRY true && azd provision` | Add a Foundry account, project and model |
 | `azd down --purge --force` | Delete everything, including the soft-deleted Key Vault |
 
-## 15. CI/CD
+## 14. CI/CD
 
 Two GitHub Actions workflows (details in [docs/HLD.md](docs/HLD.md#cicd)):
 
@@ -476,7 +467,7 @@ gh workflow run release.yml -f scope=all -f prod=true
 Don't run `azd provision` locally on these two envs: the preprovision hook would rotate
 `DMS_API_KEY` away from the GitHub secret.
 
-## 16. Connect a client
+## 15. Connect a client
 
 The server is a standard remote MCP endpoint: Streamable HTTP plus OAuth 2.0 bearer tokens from Entra.
 
@@ -504,7 +495,7 @@ npx @modelcontextprotocol/inspector@latest --web --transport http \
 **Microsoft Foundry agent.** App-only, with the agent's own identity. See [docs/foundry-agent.md](docs/foundry-agent.md)
 and [Foundry MCP tools](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/model-context-protocol).
 
-## 17. Layout
+## 16. Layout
 
 ```
 src/dms/        mock dealer system (FastAPI, API key, chaos switch)
