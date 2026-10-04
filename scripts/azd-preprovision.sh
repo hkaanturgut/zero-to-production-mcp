@@ -6,3 +6,6 @@ if [ -z "$(azd env get-value DMS_API_KEY 2>/dev/null || true)" ] || azd env get-
   azd env set DMS_API_KEY "$(openssl rand -hex 32)" >/dev/null
   echo "Generated DMS_API_KEY for this environment."
 fi
+
+# Registry firewall: allow the region's ACR build service so remote builds work.
+azd env set ACR_ALLOWED_IPS "$(./scripts/acr-service-ips.sh "${AZURE_LOCATION:-canadacentral}")" >/dev/null

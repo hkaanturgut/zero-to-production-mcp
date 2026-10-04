@@ -109,13 +109,19 @@ jobs:
         if: needs.changes.outputs.infra != 'true' && steps.azdenv.outputs.first_deploy != 'true'
         run: azd env refresh --no-prompt
 
-      - name: Build image once
-        id: image
+      - name: Open the registry firewall for this runner
+        id: acr
         if: needs.changes.outputs.app == 'true' || steps.azdenv.outputs.first_deploy == 'true'
         run: |
           acr=$(azd env get-value AZURE_CONTAINER_REGISTRY_ENDPOINT)
+          echo "name=${acr%%.*}" >> "$GITHUB_OUTPUT"
+          ./scripts/acr-access.sh open "${acr%%.*}"
+      - name: Build image once
+        id: image
+        if: steps.acr.outputs.name
+        run: |
+          acr=$(azd env get-value AZURE_CONTAINER_REGISTRY_ENDPOINT)
           image="$acr/$IMAGE_REPO:${GITHUB_SHA::12}"
-          az acr login --name "${acr%%.*}"
           docker build --build-arg PYTHON_IMAGE="$acr/base/python:3.11-slim" -t "$image" .
           echo "image=$image" >> "$GITHUB_OUTPUT"
           echo "registry_id=$(az acr show --name "${acr%%.*}" --query id -o tsv)" >> "$GITHUB_OUTPUT"
@@ -132,6 +138,9 @@ jobs:
         run: |
           docker push "${{ steps.image.outputs.image }}"
           ./scripts/ci-deploy-image.sh "${{ steps.image.outputs.image }}"
+      - name: Close the registry firewall again
+        if: always() && steps.acr.outputs.name
+        run: ./scripts/acr-access.sh close "${{ steps.acr.outputs.name }}"
       - name: Re-provision after the first deploy (adds health probes)
         if: steps.azdenv.outputs.first_deploy == 'true'
         run: ./scripts/ci-azd-env.sh && azd provision --no-prompt
