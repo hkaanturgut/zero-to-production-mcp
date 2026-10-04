@@ -12,6 +12,11 @@ else
     --image base/python:3.11-slim --force \
   || echo "WARNING: base image import failed; builds will pull from Docker Hub."
 fi
+# The Developer tier creates a demo "echo-api"; expose only our MCP API.
+if [ -n "${APIM_NAME:-}" ]; then
+  az apim api delete -g "$AZURE_RESOURCE_GROUP" --service-name "$APIM_NAME" --api-id echo-api --yes -o none 2>/dev/null || true
+fi
+
 echo
 echo "MCP endpoint: $MCP_URL"
 

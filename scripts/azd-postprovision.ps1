@@ -6,3 +6,8 @@ if ($LASTEXITCODE -ne 0) {
   if ($LASTEXITCODE -ne 0) { Write-Warning "Base image import failed; builds will pull from Docker Hub." }
 }
 Write-Host "MCP endpoint: $env:MCP_URL"
+
+# The Developer tier creates a demo "echo-api"; expose only our MCP API.
+if ($env:APIM_NAME) {
+  az apim api delete -g $env:AZURE_RESOURCE_GROUP --service-name $env:APIM_NAME --api-id echo-api --yes -o none 2>$null
+}
