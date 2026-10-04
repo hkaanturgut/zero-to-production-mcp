@@ -46,9 +46,9 @@ git checkout stage-0                      # src/live/server.py is the one-line d
 ./scripts/demo.sh rehearse                # expect: 34/34 steps passed (needs :8080 and :8081 free)
 ```
 
-- `mcpshow` already provisioned (`azd provision` done before the talk; only `azd deploy mcp` runs on stage).
-- `.vscode/mcp.json` entry `dealer-cloud` points at the URL you will show (it currently holds the
-  `mcprehearse` URL; change it to the `mcpshow` MCP URL if you demo `mcpshow`).
+- `./scripts/preshow.sh` is green (envs healthy, manager role off, show data reset, real-token call works).
+- `mcpshow` is provisioned by CI; only `azd deploy mcp -e mcpshow` runs on stage. Never `azd provision` it from the laptop.
+- `.vscode/mcp.json`: `dealer-cloud` = mcpshow, `dealer-spare` = mcprehearse (the hot spare).
 - VS Code: signed in to GitHub Copilot; Microsoft Entra account ready for the sign-in prompt.
 - Font size up, notifications off, Wi-Fi + phone hotspot ready.
 
@@ -379,7 +379,7 @@ Call `get_vehicle` `{"stock_number": "TBA-1001"}` 5 to 8 times: some fail with a
                 resp = await dms.request(method, path, **kwargs)
 ```
 
-**Start the deploy now** (T4, about 2 to 3 min, remote ACR build) and keep demoing locally while it builds:
+**Start the deploy now** (T4, about 80 s measured on 3 Oct, remote ACR build; needs azd 1.35+) and keep demoing locally while it builds:
 
 ```bash
 azd deploy mcp -e mcpshow
@@ -437,7 +437,7 @@ Point to `docs/CHECKLIST.md` for the full production list.
 | Server will not start | Check T2 traceback; `.env` sourced? `DMS_API_KEY` set? Port 8080 free? |
 | Inspector shows 401 | Restart T3 with a persona: `./scripts/demo.sh inspector salesperson` |
 | Demo data dirty / chaos left on | `./scripts/demo.sh reset` |
-| `azd deploy` slow or failed | Hot spare `mcprehearse`: `https://ca-mcp-mcprehearse.yellowdesert-1d8bdd6e.canadacentral.azurecontainerapps.io/mcp` (already the `dealer-cloud` URL in `.vscode/mcp.json`) |
+| `azd deploy` slow or failed | Hot spare `mcprehearse`: `https://ca-mcp-mcprehearse.yellowdesert-1d8bdd6e.canadacentral.azurecontainerapps.io/mcp` (the `dealer-spare` entry in `.vscode/mcp.json`). mcpshow already runs stage 5 code from the rehearsal deploy, so `dealer-cloud` also still works if only the redeploy failed |
 | Entra sign-in or network down | Finale on `dealer-local` with a local token |
 | Unsure a stage still works | `./scripts/demo.sh rehearse --stage N` (stop T1 and T2 first; it needs :8080 and :8081) |
 
