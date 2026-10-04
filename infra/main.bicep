@@ -1,6 +1,8 @@
 // azd entry point. One command builds the whole rehearsal environment:
 //   azd up            provision + deploy
 //   azd deploy mcp    ship new server code only (what happens on stage)
+// Network: VNet + private endpoints for Key Vault and ACR; API Management is the
+// only public entry to the MCP server (rate limit per caller across replicas).
 //   azd down --purge  delete everything, including the soft-deleted Key Vault
 // CI owns mcpdev and mcpshow: never run azd provision on them from a laptop
 // (the preprovision hook would rotate DMS_API_KEY away from the GitHub secret).
@@ -42,6 +44,12 @@ param deployFoundry bool = false
 param mcpExists bool = false
 param dmsExists bool = false
 
+@description('Comma-separated IPv4 ranges for the registry firewall: the region\'s AzureContainerRegistry service tag (set by the preprovision hook), so remote builds work.')
+param acrAllowedIps string = ''
+
+@description('Publisher contact for API Management notifications.')
+param apimPublisherEmail string = 'noreply@example.com'
+
 var tags = { 'azd-env-name': environmentName, workload: 'dealer-mcp' }
 
 resource rg 'Microsoft.Resources/resourceGroups@2025-04-01' = {
@@ -60,6 +68,23 @@ module entra 'modules/entra.bicep' = {
   }
 }
 
+module network 'modules/network.bicep' = {
+  name: 'network'
+  scope: rg
+  params: { environmentName: environmentName, location: location, tags: tags }
+}
+
+module apim 'modules/apim.bicep' = {
+  name: 'apim'
+  scope: rg
+  params: {
+    environmentName: environmentName
+    location: location
+    tags: tags
+    publisherEmail: apimPublisherEmail
+  }
+}
+
 module platform 'modules/platform.bicep' = {
   name: 'platform'
   scope: rg
@@ -75,6 +100,22 @@ module platform 'modules/platform.bicep' = {
     dmsExists: dmsExists
     entraClientId: entra.outputs.clientId
     entraApiUri: entra.outputs.apiUri
+    acaSubnetId: network.outputs.acaSubnetId
+    peSubnetId: network.outputs.peSubnetId
+    vaultDnsZoneId: network.outputs.vaultDnsZoneId
+    registryDnsZoneId: network.outputs.registryDnsZoneId
+    acrAllowedIps: empty(acrAllowedIps) ? [] : split(acrAllowedIps, ',')
+    apimPublicIp: apim.outputs.publicIp
+    publicBaseUrl: apim.outputs.gatewayUrl
+  }
+}
+
+module apimApi 'modules/apim-api.bicep' = {
+  name: 'apim-api'
+  scope: rg
+  params: {
+    apimName: apim.outputs.name
+    backendUrl: platform.outputs.mcpBackendUrl
   }
 }
 
@@ -92,7 +133,8 @@ module foundry 'modules/foundry.bicep' = if (deployFoundry) {
 output AZURE_RESOURCE_GROUP string = rg.name
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = platform.outputs.registryLoginServer
 output AZURE_TENANT_ID string = tenant().tenantId
-output MCP_URL string = '${platform.outputs.mcpBaseUrl}/mcp'
+output MCP_URL string = '${apim.outputs.gatewayUrl}/mcp' // via API Management
+output APIM_NAME string = apim.outputs.name
 output ENTRA_CLIENT_ID string = entra.outputs.clientId
 output ENTRA_API_URI string = entra.outputs.apiUri
 output ENTRA_SCOPES string = '${entra.outputs.apiUri}/dms.read ${entra.outputs.apiUri}/dms.write'

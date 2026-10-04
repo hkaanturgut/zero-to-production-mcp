@@ -1,4 +1,6 @@
-// Runtime platform: registry, secrets, observability, two container apps.
+// Runtime platform: registry, secrets, observability, two container apps, all
+// on a private network. Key Vault and the registry are reached through private
+// endpoints; the MCP app accepts traffic only from API Management.
 param environmentName string
 param location string
 param tags object
@@ -12,6 +14,16 @@ param dmsApiKey string
 param mcpCommand string
 param mcpExists bool
 param dmsExists bool
+param acaSubnetId string
+param peSubnetId string
+param vaultDnsZoneId string
+param registryDnsZoneId string
+@description('IPv4 ranges allowed on the registry public endpoint: the region\'s ACR service IPs, so remote builds (azd deploy) still run.')
+param acrAllowedIps array
+@description('Static public IP of API Management, the only client the MCP app accepts.')
+param apimPublicIp string
+@description('Public URL clients use (the API Management gateway); advertised in Protected Resource Metadata.')
+param publicBaseUrl string
 
 var token = toLower(uniqueString(subscription().id, environmentName, location))
 // Placeholder until the first `azd deploy`: listens on 8080 like our image does.
@@ -54,9 +66,38 @@ resource registry 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
   name: 'cr${replace(environmentName, '-', '')}${token}'
   location: location
   tags: tags
-  sku: { name: 'Basic' }
+  sku: { name: 'Premium' } // private endpoints and firewall rules need Premium
   properties: {
     adminUserEnabled: false // identities only
+    // Public endpoint denied except the region's ACR build service ranges (remote
+    // builds) and a CI runner's IP while it pushes (scripts/acr-access.sh).
+    // Container Apps pull through the private endpoint.
+    publicNetworkAccess: 'Enabled'
+    networkRuleBypassOptions: 'AzureServices' // az acr import between registries
+    networkRuleSet: {
+      defaultAction: 'Deny'
+      ipRules: [for ip in acrAllowedIps: { action: 'Allow', value: ip }]
+    }
+  }
+}
+
+resource registryEndpoint 'Microsoft.Network/privateEndpoints@2025-05-01' = {
+  name: 'pe-acr-${environmentName}'
+  location: location
+  tags: tags
+  properties: {
+    subnet: { id: peSubnetId }
+    privateLinkServiceConnections: [
+      { name: 'acr', properties: { privateLinkServiceId: registry.id, groupIds: ['registry'] } }
+    ]
+  }
+}
+
+resource registryDns 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2025-05-01' = {
+  parent: registryEndpoint
+  name: 'default'
+  properties: {
+    privateDnsZoneConfigs: [{ name: 'acr', properties: { privateDnsZoneId: registryDnsZoneId } }]
   }
 }
 
@@ -82,6 +123,30 @@ resource vault 'Microsoft.KeyVault/vaults@2025-05-01' = {
     enableRbacAuthorization: true
     enableSoftDelete: true
     softDeleteRetentionInDays: 7 // azd down --purge cleans it up between rehearsals
+    // Data plane only through the private endpoint. Bicep still writes the secret:
+    // deployments go through the control plane (management.azure.com).
+    publicNetworkAccess: 'Disabled'
+    networkAcls: { defaultAction: 'Deny', bypass: 'AzureServices' }
+  }
+}
+
+resource vaultEndpoint 'Microsoft.Network/privateEndpoints@2025-05-01' = {
+  name: 'pe-kv-${environmentName}'
+  location: location
+  tags: tags
+  properties: {
+    subnet: { id: peSubnetId }
+    privateLinkServiceConnections: [
+      { name: 'vault', properties: { privateLinkServiceId: vault.id, groupIds: ['vault'] } }
+    ]
+  }
+}
+
+resource vaultDns 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2025-05-01' = {
+  parent: vaultEndpoint
+  name: 'default'
+  properties: {
+    privateDnsZoneConfigs: [{ name: 'vault', properties: { privateDnsZoneId: vaultDnsZoneId } }]
   }
 }
 
@@ -121,6 +186,10 @@ resource env 'Microsoft.App/managedEnvironments@2025-07-01' = {
   location: location
   tags: tags
   properties: {
+    // In the VNet so the apps reach Key Vault and the registry privately. External:
+    // the MCP app has a public ingress, restricted to API Management's IP below.
+    vnetConfiguration: { infrastructureSubnetId: acaSubnetId, internal: false }
+    workloadProfiles: [{ name: 'Consumption', workloadProfileType: 'Consumption' }]
     appLogsConfiguration: {
       destination: 'log-analytics'
       logAnalyticsConfiguration: {
@@ -165,6 +234,7 @@ resource dms 'Microsoft.App/containerApps@2025-07-01' = {
   }
   properties: {
     managedEnvironmentId: env.id
+    workloadProfileName: 'Consumption'
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
@@ -192,7 +262,7 @@ resource dms 'Microsoft.App/containerApps@2025-07-01' = {
       scale: { minReplicas: 1, maxReplicas: 1 } // in-memory demo data: exactly one replica
     }
   }
-  dependsOn: [acrPull, kvSecretsUser]
+  dependsOn: [acrPull, kvSecretsUser, registryDns, vaultDns]
 }
 
 // The MCP server: the only public entry point.
@@ -206,6 +276,7 @@ resource mcp 'Microsoft.App/containerApps@2025-07-01' = {
   }
   properties: {
     managedEnvironmentId: env.id
+    workloadProfileName: 'Consumption'
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
@@ -213,6 +284,10 @@ resource mcp 'Microsoft.App/containerApps@2025-07-01' = {
         targetPort: 8080
         transport: 'http'
         allowInsecure: false
+        // Only API Management may call the server, so its rate limit can't be bypassed.
+        ipSecurityRestrictions: [
+          { name: 'apim', description: 'API Management gateway', ipAddressRange: '${apimPublicIp}/32', action: 'Allow' }
+        ]
       }
       registries: [{ server: registry.properties.loginServer, identity: identity.id }]
       secrets: concat(dmsKeySecretRef, [
@@ -235,7 +310,7 @@ resource mcp 'Microsoft.App/containerApps@2025-07-01' = {
             { name: 'ENTRA_API_URI', value: entraApiUri }
             { name: 'DMS_BASE_URL', value: 'http://${dmsName}' }
             { name: 'DMS_API_KEY', secretRef: 'dms-api-key' }
-            { name: 'PUBLIC_BASE_URL', value: 'https://${mcpName}.${env.properties.defaultDomain}' }
+            { name: 'PUBLIC_BASE_URL', value: publicBaseUrl }
             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', secretRef: 'appinsights-connection-string' }
           ]
           // Health probes only once our image runs (the placeholder has no /healthz).
@@ -250,9 +325,9 @@ resource mcp 'Microsoft.App/containerApps@2025-07-01' = {
       }
     }
   }
-  dependsOn: [acrPull, kvSecretsUser]
+  dependsOn: [acrPull, kvSecretsUser, registryDns, vaultDns]
 }
 
 output registryLoginServer string = registry.properties.loginServer
 output mcpAppName string = mcp.name
-output mcpBaseUrl string = 'https://${mcp.properties.configuration.ingress.fqdn}'
+output mcpBackendUrl string = 'https://${mcp.properties.configuration.ingress.fqdn}'

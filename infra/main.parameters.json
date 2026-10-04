@@ -12,6 +12,8 @@
     "agentPrincipalIds": { "value": "${AGENT_PRINCIPAL_IDS}" },
     "deployFoundry": { "value": "${DEPLOY_FOUNDRY=false}" },
     "mcpExists": { "value": "${SERVICE_MCP_RESOURCE_EXISTS=false}" },
-    "dmsExists": { "value": "${SERVICE_DMS_RESOURCE_EXISTS=false}" }
+    "dmsExists": { "value": "${SERVICE_DMS_RESOURCE_EXISTS=false}" },
+    "acrAllowedIps": { "value": "${ACR_ALLOWED_IPS}" },
+    "apimPublisherEmail": { "value": "${APIM_PUBLISHER_EMAIL=noreply@example.com}" }
   }
 }
