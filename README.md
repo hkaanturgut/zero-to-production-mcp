@@ -13,7 +13,19 @@ Bicep + azd path to Azure, with GitHub Actions for CI/CD.
 
 All cars, customers and leads are synthetic.
 
-![Solution architecture](docs/architecture.svg)
+## Architecture
+
+![Solution architecture: agent clients sign in with Microsoft Entra ID and call the MCP server on Azure Container Apps, which calls an internal dealer API with a key from Key Vault and audits every call to Log Analytics](docs/architecture.svg)
+
+One request, end to end:
+
+1. **Discover.** A call without a token gets 401 with `resource_metadata`, which names Entra and the scopes.
+2. **Sign in.** The client gets a v2 token from Entra: delegated scopes for people, app roles for agents.
+3. **Call.** `POST /mcp` with the bearer token. Stateless (MCP 2026-07-28), so any replica can answer.
+4. **Verify.** Signature, issuer and audience are checked; `scp` and `roles` merge into one permission set, and tools the caller can't use are hidden.
+5. **Act.** Business rules run in code, then the server calls the internal DMS with its API key. The caller's token never goes downstream.
+6. **Secret.** `DMS_API_KEY` is a Key Vault reference resolved by a user-assigned managed identity.
+7. **Audit.** One JSON line per tool call (correlation ID, tool, argument names, caller) lands in Log Analytics.
 
 ## Quick start (offline, about 2 minutes)
 
