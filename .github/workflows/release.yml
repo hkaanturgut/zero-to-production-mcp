@@ -140,7 +140,7 @@ jobs:
           ./scripts/ci-deploy-image.sh "${{ steps.image.outputs.image }}"
       - name: Close the registry firewall again
         if: always() && steps.acr.outputs.name
-        run: ./scripts/acr-access.sh close "${{ steps.acr.outputs.name }}"
+        run: ./scripts/acr-access.sh close "${{ steps.acr.outputs.name }}" "${{ steps.acr.outputs.ip }}"
       - name: Re-provision after the first deploy (adds health probes)
         if: steps.azdenv.outputs.first_deploy == 'true'
         run: ./scripts/ci-azd-env.sh && azd provision --no-prompt
