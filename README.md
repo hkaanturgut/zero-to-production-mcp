@@ -180,7 +180,7 @@ Security tests to read first: `tests/test_auth.py`, `tests/test_policy_and_dange
 
 **Testing**
 
-- 73 tests over real HTTP with real JWTs (`tests/conftest.py` starts the DMS and the server).
+- 76 tests over real HTTP with real JWTs (`tests/conftest.py` starts the DMS and the server).
 - Read tool results through `.structured_content` (`.data` returns objects).
 - `tests/test_live_stages.py` runs every workshop stage, so the live build can't drift.
 - `./scripts/demo.sh rehearse` runs the 34-step stage runbook end to end.
@@ -265,13 +265,14 @@ Set `APPLICATIONINSIGHTS_CONNECTION_STRING` to add OpenTelemetry traces through
 ## 9. Known gaps and hardening backlog
 
 Being honest about these is part of production readiness. None of them affects the workshop
-demo, which runs on a single replica.
+demo, which runs on a single replica. The stage build (`src/live`) stays as taught; the fixes live
+in the reference build (`src/server`), which you switch to with `MCP_COMMAND=server`.
 
 | Gap | Risk | Fix |
 | --- | --- | --- |
-| `requestState` is sealed with a per-process key (SDK default) | With more than one replica, a confirmation answered on a different replica fails closed (safe, but the user has to retry) | Pass a shared key from Key Vault: `RequestStateSecurity(keys=[secret])` |
+| **Fixed in the reference build.** `requestState` was sealed with a per-process key (SDK default) | With more than one replica, a confirmation answered on a different replica fails closed (`Invalid or expired requestState`) | Set `REQUEST_STATE_KEYS` (comma-separated ring, first key seals; rotate as `new,old` then `new`). Store it in Key Vault like `DMS_API_KEY`. Tested in `test_hardening.py` with two replicas. |
 | Rate limit is in memory, per replica | With 3 replicas a caller gets up to 3× the limit | Enforce at a gateway ([API Management for MCP](https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview)) or use a shared store |
-| Host/Origin header validation is off (FastMCP default) | The spec requires `Origin` validation against DNS rebinding; the bearer token requirement limits the risk for this public server | Enable `host_origin_protection` with the allowed hosts |
+| **Fixed in the reference build.** Origin validation was off (FastMCP default) | The [transport spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http) requires `Origin` validation against DNS rebinding | `build_app()` rejects foreign origins with 403; allowed list from `ALLOWED_ORIGINS` (default: `PUBLIC_BASE_URL`). Requests without `Origin` (IDEs, CLIs, agents) pass; Host checks stay at the ingress so health probes work. |
 | Azure CLI is pre-authorized on the Entra app | Handy for testing; broadens who can get a token without consent | Remove after the event (`infra/modules/entra.bicep`) |
 | Public endpoints for ACR and Key Vault | Larger attack surface | Private endpoints and VNet integration |
 | No reviewer gate on prod | GitHub Free plan | Paid plan: required reviewers on `prod`, branch protection with the 4 checks |
@@ -310,7 +311,7 @@ can explain to the user. Try `./scripts/demo.sh chaos errors`.
 
 **Can it scale?**
 The server is stateless (2026-07-28), so Container Apps scales replicas horizontally. Before going
-past one replica, apply the first two items in [section 9](#9-known-gaps-and-hardening-backlog).
+past one replica, set `REQUEST_STATE_KEYS` and move rate limiting to a gateway ([section 9](#9-known-gaps-and-hardening-backlog)).
 
 **Where is the data, and what leaves the backend?**
 Canada Central. Tools return the minimum, and personal data is masked before the model sees it.
@@ -374,7 +375,7 @@ In Azure the server runs with `AUTH_MODE=entra` and trusts only Microsoft Entra 
 ## 13. Run the tests
 
 ```bash
-uv run pytest -q          # 73 tests: auth, policy, confirmation, resilience, secrets, every live stage
+uv run pytest -q          # 76 tests: auth, policy, confirmation, resilience, secrets, hardening, every live stage
 uv run ruff check src tests
 ./scripts/demo.sh rehearse  # 34 runbook steps
 ```
@@ -390,6 +391,7 @@ uv run ruff check src tests
 | `test_resilience_and_safety.py` | Timeouts, retries, circuit breaker, error masking, secret hygiene, rate limit, audit |
 | `test_tool_contracts.py` | Every tool has one tag, annotations and a schema |
 | `test_live_stages.py` | Every workshop stage file |
+| `test_hardening.py` | Foreign `Origin` rejected; confirmation across two replicas with and without a shared key |
 
 ## 14. Deploy to Azure (Bicep + azd)
 
