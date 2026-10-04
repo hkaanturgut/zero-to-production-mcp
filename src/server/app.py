@@ -5,11 +5,13 @@ from __future__ import annotations
 import logging
 import os
 from contextlib import asynccontextmanager
+from urllib.parse import urlsplit
 
 from fastmcp import FastMCP
 from fastmcp.server.auth import restrict_tag
 from fastmcp.server.middleware import AuthMiddleware
 from fastmcp.server.middleware.rate_limiting import RateLimitingMiddleware
+from mcp.server.request_state import RequestStateSecurity
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -40,11 +42,24 @@ def build_server(settings: Settings, backend: DmsBackend | None = None) -> FastM
         yield
         await backend.aclose()
 
+    if not settings.request_state_keys:
+        logging.getLogger(__name__).warning(
+            "REQUEST_STATE_KEYS not set: confirmations are sealed with a per-process key "
+            "and only work while every round trip reaches the same replica"
+        )
+
     mcp = FastMCP(
         name="dealer-sales-assistant",
         instructions=INSTRUCTIONS,
         auth=build_auth(settings),
         lifespan=lifespan,
+        # Seals requestState (AES-256-GCM, bound to caller, request and this
+        # server's name) so a client can't forge or replay a confirmation.
+        request_state_security=(
+            RequestStateSecurity(keys=list(settings.request_state_keys))
+            if settings.request_state_keys
+            else None
+        ),
         # Unexpected exceptions become a generic error: no stack traces,
         # hostnames or backend bodies ever reach the client or the model.
         mask_error_details=True,
@@ -78,11 +93,28 @@ def build_server(settings: Settings, backend: DmsBackend | None = None) -> FastM
     return mcp
 
 
+def build_app(settings: Settings, backend: DmsBackend | None = None):
+    """The MCP endpoint at /mcp, with Origin validation against DNS rebinding.
+
+    Requests without an Origin header (IDEs, CLIs, agents) pass. Host checking
+    is left to the ingress: Container Apps probes address the pod IP.
+    """
+    origins = settings.allowed_origins or (_origin(settings.public_base_url),)
+    return build_server(settings, backend).http_app(
+        path="/mcp", host_origin_protection="auto", allowed_origins=list(origins)
+    )
+
+
+def _origin(url: str) -> str:
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}"
+
+
 def create_app():
     """ASGI app for uvicorn / Container Apps."""
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(message)s")
     _configure_telemetry()
-    return build_server(Settings.from_env()).http_app(path="/mcp")
+    return build_app(Settings.from_env())
 
 
 def _configure_telemetry() -> None:
