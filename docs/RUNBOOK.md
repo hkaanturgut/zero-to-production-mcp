@@ -401,7 +401,9 @@ azd deploy mcp -e mcpshow
 - Errors the model can act on: "not found, use search_inventory", "retryable". No stack traces.
 - Audit: who, what, outcome, duration, argument names only (logs are read by more people than the database). Rate limit is per verified caller (`caller_key`: 5/s, burst 20), not per IP.
 
-**Deploy check** (when `azd deploy` finishes): `curl -s https://ca-mcp-mcpshow.<region>.azurecontainerapps.io/healthz` (the `MCP_URL` without `/mcp`) returns `{"status":"ok"}`.
+**Deploy check** (when `azd deploy` finishes): `curl -s "$(azd env get-value MCP_URL -e mcpshow | sed 's#/mcp$##')/healthz"` returns `{"status":"ok"}` through API Management. azd prints the container app's own URL as "Endpoint"; that one answers 403 by design (only API Management may call it).
+
+**Talking point:** the deploy just shipped into a private network. Clients reach the server only through API Management, which applies one rate limit per caller across all replicas; Key Vault and the registry have no open public access.
 
 **If behind:** skip "show the problem first", skip `chaos errors`. Never skip starting `azd deploy` by 11:58; if it is not started by 12:00, go straight to the hot spare (below).
 
@@ -437,6 +439,7 @@ Point to `docs/CHECKLIST.md` for the full production list.
 | Server will not start | Check T2 traceback; `.env` sourced? `DMS_API_KEY` set? Port 8080 free? |
 | Inspector shows 401 | Restart T3 with a persona: `./scripts/demo.sh inspector salesperson` |
 | Demo data dirty / chaos left on | `./scripts/demo.sh reset` |
+| API Management down (Developer tier upgrade, ~25 min, no SLA) | Hot spare `dealer-spare` (mcprehearse, direct to Container Apps). `./scripts/preshow.sh` checks Resource Health in the morning |
 | `azd deploy` slow or failed | Hot spare `mcprehearse`: `https://ca-mcp-mcprehearse.yellowdesert-1d8bdd6e.canadacentral.azurecontainerapps.io/mcp` (the `dealer-spare` entry in `.vscode/mcp.json`). mcpshow already runs stage 5 code from the rehearsal deploy, so `dealer-cloud` also still works if only the redeploy failed |
 | Entra sign-in or network down | Finale on `dealer-local` with a local token |
 | Unsure a stage still works | `./scripts/demo.sh rehearse --stage N` (stop T1 and T2 first; it needs :8080 and :8081) |

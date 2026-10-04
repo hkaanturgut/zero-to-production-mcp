@@ -21,7 +21,7 @@ Keep slides to the frame around the live build; the code is the content.
 | 3 | The pattern | An MCP server in front of the internal API: identity in, policy in code, minimum data out | Agent → MCP server → internal API |
 | 4 | What changed in MCP 2026-07-28 | Stateless (no initialize), multi round-trip confirmation (`InputRequiredResult`), CIMD replaces dynamic registration, Roots/Sampling/Logging deprecated | Four tiles, one per change |
 | 5 | Today's showcase | Fictional Toronto used-car dealer, synthetic data (40 cars, 20 leads). The dealer is the showcase; the patterns are the point. | Dealer card |
-| 6 | Architecture | Where we end up | `docs/architecture.svg` |
+| 6 | Architecture | Where we end up: API Management front door, private network, private Key Vault and ACR | `docs/architecture.svg` |
 | 7 | The build plan | Stage 0 to 5, one production lesson each (see the table below) | Stage ladder |
 | | **Live build** | Stages 0 to 5 | Editor + terminal |
 | 8 | From commit to Azure | PR checks, build once, promote the same digest, OIDC (no secrets) | Pipeline strip from the architecture page |
@@ -63,6 +63,7 @@ not the glitch.
 | Lost in a stage | Behind the clock checkpoint | `git checkout stage-N` and continue; use the runbook's "If behind" cuts |
 | MCP Inspector won't open | Browser tab blank or port busy | Restart T3 (`./scripts/demo.sh inspector <persona>`); else Inspector CLI: `npx @modelcontextprotocol/inspector --cli http://127.0.0.1:8080/mcp --transport http --header "Authorization: Bearer $(./scripts/demo.sh token salesperson)" --method tools/list` |
 | `azd deploy` slow (over 3 min) or fails | No "SUCCESS" by 12:01 | Keep going: mcpshow already runs stage 5 code from the rehearsal deploy. If mcpshow itself is down, use `dealer-spare` (mcprehearse). Show V3 for the deploy. |
+| API Management gateway down | `dealer-cloud` times out; Resource Health says "being upgraded" | Switch to `dealer-spare` (mcprehearse). Say it: the Developer tier has no SLA; production uses Premium. |
 | Entra sign-in in VS Code fails | Error or no browser prompt | Retry once from *MCP: List Servers > dealer-cloud > Start*; else play V1. |
 | Copilot picks odd tools or wanders | Wrong car, extra calls | Use the exact prompt (V1 script); name the car ("the 2021 Tiguan"). Explain: the server enforces policy whatever the model does. |
 | Manager confirmation won't render | No confirm dialog | Play V2. Point at `confirmation()` in `src/server/tools/common.py`. |

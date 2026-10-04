@@ -17,7 +17,7 @@
     },
     "dealer-cloud": {
       "type": "http",
-      "url": "https://ca-mcp-mcpshow.happypebble-d6f825ba.canadacentral.azurecontainerapps.io/mcp"
+      "url": "https://apim-mcpshow-2scnovzz.azure-api.net/mcp"
     },
     "dealer-spare": {
       "type": "http",
