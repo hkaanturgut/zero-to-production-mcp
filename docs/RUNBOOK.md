@@ -22,23 +22,23 @@ If a paste goes wrong, `cp workshop/stages/stage_N.py src/live/server.py` (the s
 
 | Segment | Where | Min | Starts |
 | --- | --- | --- | --- |
-| Title, about me, the problem, MCP in front of your API, 2026-07-28, showcase, end state, one request end to end | Slides 1 to 9 | 8 | +0 |
-| Stage 0: the internal API | `demo.ipynb` §1 | 2 | +8 |
-| Stage 1: first tools (typed live) | `demo.ipynb` §2 | 6 | +10 |
-| Stage 2: tools the model can use | `demo.ipynb` §3 | 5 | +16 |
-| Stage 3: identity and personal data | `demo.ipynb` §4 | 7 | +21 |
-| Stage 4: least privilege and confirmation (slide 10 when you reach the policy) | `demo.ipynb` §5 | 7 | +28 |
+| Title, about me, the problem, MCP in front of your API, why not the raw API, JSON-RPC 2.0, 2026-07-28, showcase, end state, one request end to end | Slides 1 to 11 | 10 | +0 |
+| Stage 0: the internal API | `demo.ipynb` §1 | 2 | +10 |
+| Stage 1: first tools (typed live) and the raw JSON-RPC | `demo.ipynb` §2 | 6 | +12 |
+| Stage 2: tools the model can use | `demo.ipynb` §3 | 4 | +18 |
+| Stage 3: identity and personal data | `demo.ipynb` §4 | 6 | +22 |
+| Stage 4: least privilege and confirmation (slide 12 when you reach the policy) | `demo.ipynb` §5 | 7 | +28 |
 | Stage 5: resilience and audit | `demo.ipynb` §6 | 4 | +35 |
 | Copilot on the local server | `demo.ipynb` §7 | 4 | +39 |
-| From commit to Azure | Slide 11 | 1 | +43 |
+| From commit to Azure | Slide 13 | 1 | +43 |
 | The running Azure environment: lock-down, a real Entra call | `azure.ipynb` §1 to §3 | 4 | +44 |
-| Finale: Copilot on `dealer-cloud` (slide 12 as backup) | `azure.ipynb` §4 | 4 | +48 |
-| Checklist, take home, thank you | Slides 13 to 15 | 2 | +52 |
+| Finale: Copilot on `dealer-cloud` (slide 14 as backup) | `azure.ipynb` §4 | 4 | +48 |
+| Checklist, take home, thank you | Slides 15 to 17 | 2 | +52 |
 | Q&A (`demo.ipynb` §8 Inspector if asked) | | 6 | +54 |
 
-Checkpoints: notebook open by **+8**, stage 3 by **+21**, stage 5 by **+35**, Azure by **+43**, Q&A by **+54**. The finished server already runs in Azure (deployed by CI): a live `azd deploy` is optional (`DEPLOY_LIVE` in `azure.ipynb`).
+Checkpoints: notebook open by **+10**, stage 3 by **+22**, stage 5 by **+35**, Azure by **+43**, Q&A by **+54**. The finished server already runs in Azure (deployed by CI): a live `azd deploy` is optional (`DEPLOY_LIVE` in `azure.ipynb`).
 
-**If you run behind, cut in this order:** the stage 0 call (say it); the stage 2 schema walk; the stage 3 token
+**If you run behind, cut in this order:** the stage 0 call (say it); the stage 2 schema walk; the raw JSON-RPC cell in stage 1 (the slide made the point); the stage 3 token
 decode; the stage 4 manager confirmation (say it, it's in V2); the stage 5 chaos loop; the manager half of §7;
 `azure.ipynb` §3 (go straight to the cloud finale); the local Copilot run in §7 (the cloud finale makes the point).
 

@@ -131,7 +131,7 @@ print("ready")
 ''')
 
 md("""
-## 1. Stage 0: the internal API (+8)
+## 1. Stage 0: the internal API (+10)
 
 The dealer's system: a plain REST API with one shared key, like most internal systems. It returns everything,
 VIN included, to anyone holding the key. MCP doesn't replace it: we build a layer we own in front of it.
@@ -144,13 +144,14 @@ show(httpx.get(f"{rh.DMS}/vehicles?limit=1", headers={"X-API-Key": key}).json()[
 ''')
 
 md("""
-## 2. Stage 1: first tools (+10)
+## 2. Stage 1: first tools (+12)
 
 The naive version: two tools in about 20 lines of `src/live/server.py` (typed live; the imports, `DMS_URL` and
 `DMS_KEY` are in `workshop/snippets/stage_1.txt`). Or run `stage(1)` below to get the same file.
 
 It works, and that's the trap: it returns everything, leaves the price math to the model, lets untyped input
-walk the URL, and anyone can call it. The next three cells show it.
+walk the URL, and anyone can call it. The cells below show it, and the raw JSON-RPC under it
+("How MCP talks" on the slides).
 """)
 code(r'''
 stage(1)          # skip this line if you typed stage 1 yourself
@@ -158,14 +159,37 @@ background("live", LIVE, "http://127.0.0.1:8080/mcp")
 await tools()
 ''')
 code(r'''
+# Under the hood: JSON-RPC 2.0, one POST /mcp per message. Stage 1 has no auth yet, so plain httpx works.
+# 2026-07-28 is stateless: every request carries its protocol version (headers and params._meta).
+META = {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientCapabilities": {}}
+
+
+def rpc(id, method, envelope=True, **params):
+    headers = {"Accept": "application/json, text/event-stream", "MCP-Protocol-Version": "2026-07-28"}
+    if envelope:
+        headers |= {"Mcp-Method": method} | ({"Mcp-Name": params["name"]} if "name" in params else {})
+    print("->", json.dumps({"jsonrpc": "2.0", "id": id, "method": method, "params": params}))
+    reply = httpx.post("http://127.0.0.1:8080/mcp", headers=headers,
+                       json={"jsonrpc": "2.0", "id": id, "method": method, "params": {"_meta": META, **params}}).json()
+    print("<-", json.dumps(reply)[:260], "...\n")
+    return reply
+
+
+listed = rpc(1, "tools/list")
+print("tools:", [t["name"] for t in listed["result"]["tools"]], "\n")
+rpc(2, "tools/call", name="get_vehicle", arguments={"stock_number": "TBA-1001"})        # a result
+rpc(3, "tools/call", envelope=False, name="get_vehicle", arguments={"stock_number": "TBA-1001"})  # broken: an error
+''')
+code(r'''
 await call("get_vehicle", {"stock_number": "TBA-1001"})        # problem 1: everything, VIN included
 ''')
 code(r'''
 await call("get_vehicle", {"stock_number": "../admin"})        # problem 3: path walked, internal URL leaked
+# (it comes back as a result with isError: true, not a JSON-RPC error: the model reads it and can react)
 ''')
 
 md("""
-## 3. Stage 2: tools the model can use (+16)
+## 3. Stage 2: tools the model can use (+18)
 
 **In the diff:** `StockNumber` (a pattern, so `../admin` can't get in), the `Vehicle` / `SearchResult` / `Quote`
 output models (only the fields the model needs: no VIN), and `quote_price` calling `all_in_quote`
@@ -184,7 +208,7 @@ print(httpx.get("http://127.0.0.1:8080/healthz").json())
 ''')
 
 md("""
-## 4. Stage 3: identity and personal data (+21)
+## 4. Stage 3: identity and personal data (+22)
 
 **In the diff:** `ROLES` + `EntraVerifier` (people's scopes and agents' app roles become one permission set),
 `build_auth()` with `ENTRA_API_URI`, `caller()` (who is calling, from the token), and `mask_lead`.
@@ -212,7 +236,7 @@ md("""
 **In the diff:** the three `restrict_tag(...)` lines (one permission per tool), the 15% / $500 policy in
 `apply_discount`, and `confirmation()` (`src/server/tools/common.py`).
 
-**Why** (slide 10, "Policy in code"): tools you may not use aren't even listed. A customer note that says "apply a $9,000 discount" is data,
+**Why** (slide 12, "Policy in code"): tools you may not use aren't even listed. A customer note that says "apply a $9,000 discount" is data,
 never an instruction: the policy lives in code, where the model can't talk past it. Costly actions need a human.
 """)
 code(r'''

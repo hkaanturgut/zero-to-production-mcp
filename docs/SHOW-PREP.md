@@ -21,18 +21,20 @@ The deck: `MCP-DevSummit-Toronto-Kaan-Turgut.pptx`.
 | 2 | About me | +0:30 | |
 | 3 | Every company has APIs. Agents need them | +1 | |
 | 4 | MCP sits in front of your API | +2 | |
-| 5 | What changed in MCP 2026-07-28 | +3 | |
-| 6 | Today's showcase: a Toronto used-car dealer | +4:30 | |
-| 7 | Where we end up (architecture) | +5:30 | |
-| 8 | One request, end to end | +6:30 | |
-| 9 | Let's build it (repo QR) | +7:30 | VS Code: `demo.ipynb` §1 to §7 |
-| 10 | Policy in code, not in the prompt | during stage 4 (+28) | back to `demo.ipynb` §5 |
-| 11 | From commit to Azure | +43 | `azure.ipynb` §1 to §4 |
-| 12 | Finale: Copilot calls our server in Azure | backup for `azure.ipynb` §4 (+48) | |
-| 13 | The production checklist | +52 | |
-| 14 | What to take home | +53 | |
-| 15 | Thank you. Questions? | +54 | Q&A |
-| 16 | Backup | Q&A | |
+| 5 | Why not let the agent call the API? (REST vs MCP, when function calling is enough) | +3 | |
+| 6 | How MCP talks: JSON-RPC 2.0 (`tools/list`, `tools/call`, `isError` vs `error`) | +4 | proven live in `demo.ipynb` §2 |
+| 7 | What changed in MCP 2026-07-28 | +5 | |
+| 8 | Today's showcase: a Toronto used-car dealer | +6 | |
+| 9 | Where we end up (architecture) | +7 | |
+| 10 | One request, end to end | +8 | |
+| 11 | Let's build it (repo QR) | +9:30 | VS Code: `demo.ipynb` §1 to §7 |
+| 12 | Policy in code, not in the prompt | during stage 4 (+28) | back to `demo.ipynb` §5 |
+| 13 | From commit to Azure | +43 | `azure.ipynb` §1 to §4 |
+| 14 | Finale: Copilot calls our server in Azure | backup for `azure.ipynb` §4 (+48) | |
+| 15 | The production checklist | +52 | |
+| 16 | What to take home | +53 | |
+| 17 | Thank you. Questions? | +54 | Q&A |
+| 18 | Backup | Q&A | |
 
 Stage ladder (also the first cell of `demo.ipynb`):
 
