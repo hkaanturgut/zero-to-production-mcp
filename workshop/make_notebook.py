@@ -43,7 +43,10 @@ from fastmcp.client.auth import BearerAuth
 LOGS = ROOT / ".dev" / "notebook"
 LOGS.mkdir(parents=True, exist_ok=True)
 RUNNING: dict = {}
-AUTO = os.environ.get("NOTEBOOK_AUTO") == "1"   # headless test: no prompts, no deploy, no VS Code diff
+AUTO = os.environ.get("NOTEBOOK_AUTO") == "1"   # headless test: no prompts, no VS Code diff, no Azure calls
+# The Azure show environment already runs the finished server (deployed by CI). Leave this False to
+# show it as is; True runs `azd deploy mcp -e mcpshow` live in stage 5 (about 75 s).
+DEPLOY_LIVE = False
 LIVE = ["uv", "run", "uvicorn", "live.server:app", "--app-dir", "src", "--port", "8080",
         "--reload", "--reload-dir", "src/live"]
 
@@ -208,14 +211,16 @@ await call("apply_discount", {"stock_number": "TBA-1001", "amount": 900, "reason
 md("""
 ## 6. Stage 5: resilience and audit (+36)
 
-The deploy starts here (+38) and builds while you continue.
+The finished server is already running in Azure (deployed by CI). Set `DEPLOY_LIVE = True` in the Setup
+cell only if you want to redeploy live here (about 75 s, builds while you continue). To create your own
+Azure environment, use [deploy-azure.ipynb](deploy-azure.ipynb).
 """)
 code(r'''
 stage(5)
-if AUTO:
-    print("deploy skipped in the headless test")
-else:
+if DEPLOY_LIVE and not AUTO:
     background("deploy", ["azd", "deploy", "mcp", "-e", "mcpshow", "--no-prompt"])
+else:
+    print("No redeploy: this code already runs in Azure behind API Management.")
 ''')
 code(r'''
 rh.chaos("flaky")                                                # half the DMS calls fail
@@ -232,10 +237,11 @@ log_tail("live", n=4, grep="tool_call")                          # one audit lin
 md("""
 ## 7. Deploy and the production walkthrough (+41)
 
-Show the API Management policy in the portal while the deploy finishes. Then prove the lock-down.
+Show the API Management policy and the private network in the portal, then prove the lock-down on the
+running environment (read-only: nothing is changed).
 """)
 code(r'''
-if not AUTO:
+if DEPLOY_LIVE and not AUTO:
     log_tail("deploy", n=4)                                      # wait for SUCCESS (about 75 s)
 ''')
 code(r'''
@@ -279,9 +285,9 @@ print("stopped; src/live/server.py is back to main")
 ''')
 
 
-def build() -> dict:
+def build(cells_in: list) -> dict:
     cells = []
-    for i, (kind, src) in enumerate(CELLS):
+    for i, (kind, src) in enumerate(cells_in):
         cell = {"cell_type": kind, "id": f"cell-{i:02d}", "metadata": {}, "source": src.splitlines(keepends=True)}
         if kind == "code":
             cell.update(execution_count=None, outputs=[])
@@ -298,6 +304,9 @@ def build() -> dict:
 
 
 if __name__ == "__main__":
-    out = Path(__file__).with_name("demo.ipynb")
-    out.write_text(json.dumps(build(), indent=1) + "\n")
-    print(f"wrote {out} ({len(CELLS)} cells)")
+    from make_deploy_notebook import DEPLOY_CELLS
+
+    for name, cells in (("demo.ipynb", CELLS), ("deploy-azure.ipynb", DEPLOY_CELLS)):
+        out = Path(__file__).with_name(name)
+        out.write_text(json.dumps(build(cells), indent=1) + "\n")
+        print(f"wrote {out} ({len(cells)} cells)")
