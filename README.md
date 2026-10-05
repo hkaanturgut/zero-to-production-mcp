@@ -23,8 +23,8 @@ A fictional Toronto used-car dealer is the showcase; the patterns are the point.
 ## Follow the workshop
 
 Everything in the session runs on your laptop: a mock dealer system, the MCP server you build, local
-test tokens and MCP Inspector. **No Azure account needed.** The deploy to Azure at the end is the
-presenter's; you can repeat it later with `azd up` ([Deploy to Azure](#deploy-to-azure)).
+test tokens and MCP Inspector. **No Azure account needed.** The Azure part at the end runs on the
+presenter's environment; deploy your own later with [`workshop/deploy-azure.ipynb`](workshop/deploy-azure.ipynb) ([Deploy to Azure](#deploy-to-azure)).
 
 **Before the session** (downloads are slow on shared conference Wi-Fi): install git, Python 3.11+,
 [uv](https://docs.astral.sh/uv/) and Node.js (for MCP Inspector), then run:
@@ -432,6 +432,10 @@ uv run ruff check src tests
 ### Deploy to Azure
 
 Needs [azd](https://aka.ms/azd) 1.35+, the Azure CLI, and rights to create resource groups and app registrations.
+
+Prefer a guided version? Open [`workshop/deploy-azure.ipynb`](workshop/deploy-azure.ipynb): it signs you in, asks for
+the subscription, a name and a region, shows what will be created and what it costs, and deploys only after you
+type `yes`. Its last cell deletes everything again.
 
 ```bash
 azd auth login && az login

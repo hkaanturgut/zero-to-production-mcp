@@ -28,13 +28,13 @@ If a paste goes wrong, `cp workshop/stages/stage_N.py src/live/server.py` (the s
 | 2 | Tools the model can use | 6 | +12 | 18 |
 | 3 | Auth, identity, PII | 9 | +18 | 27 |
 | 4 | Least privilege, policy, confirmation | 9 | +27 | 36 |
-| 5 | Resilience, audit (deploy starts at +38) | 5 | +36 | 41 |
-| | Deploy and production walkthrough | 5 | +41 | 46 |
+| 5 | Resilience, audit | 5 | +36 | 41 |
+| | Production walkthrough (running Azure environment) | 5 | +41 | 46 |
 | | Finale: Copilot on the deployed server | 6 | +46 | 52 |
 | | Wrap-up | 2 | +52 | 54 |
 | | Q&A | 6 | +54 | 60 |
 
-Checkpoints: stage 3 by **+18**, stage 5 by **+36**, `azd deploy` started by **+38**, Q&A by **+54**.
+Checkpoints: stage 3 by **+18**, stage 5 by **+36**, finale by **+46**, Q&A by **+54**. The finished server already runs in Azure (deployed by CI): a live `azd deploy` is optional.
 
 **60-minute flow:** stay on `main`; type stage 1 live; for stages 2 to 5 run `./scripts/demo.sh stage N`
 (sets `src/live/server.py` to stage N and opens the VS Code diff against N-1) and walk the key lines.
@@ -385,7 +385,7 @@ Call `get_vehicle` `{"stock_number": "TBA-1001"}` 5 to 8 times: some fail with a
                 resp = await dms.request(method, path, **kwargs)
 ```
 
-**Start the deploy now** (T4, about 80 s measured on 3 Oct, remote ACR build; needs azd 1.35+) and keep demoing locally while it builds:
+**Optional live deploy** (the code already runs in Azure; T4, about 75 s, remote ACR build; needs azd 1.35+), keep demoing locally while it builds:
 
 ```bash
 azd deploy mcp -e mcpshow
@@ -411,7 +411,7 @@ azd deploy mcp -e mcpshow
 
 **Talking point:** the deploy just shipped into a private network. Clients reach the server only through API Management, which applies one rate limit per caller across all replicas; Key Vault and the registry have no open public access.
 
-**If behind:** skip "show the problem first", skip `chaos errors`. Never skip starting `azd deploy` by +38; if it is not started by +40, go straight to the hot spare (below).
+**If behind:** skip "show the problem first", skip `chaos errors`. If you do a live deploy, start it by +38; otherwise skip it and show the running environment.
 
 ---
 

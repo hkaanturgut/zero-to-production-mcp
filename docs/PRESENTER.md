@@ -14,13 +14,13 @@ what to **run**, what to **open in code**, what to **show as a picture**, what t
 | 4. Stage 2: tools the model can use | +12 | 6 |
 | 5. Stage 3: identity and personal data | +18 | 9 |
 | 6. Stage 4: least privilege and confirmation | +27 | 9 |
-| 7. Stage 5: resilience, audit (deploy starts at +38) | +36 | 5 |
-| 8. Deploy and production walkthrough | +41 | 5 |
+| 7. Stage 5: resilience, audit | +36 | 5 |
+| 8. Production walkthrough (the running Azure environment) | +41 | 5 |
 | 9. Finale: VS Code + Copilot | +46 | 6 |
 | 10. Wrap-up | +52 | 2 |
 | 11. Q&A | +54 | 6 |
 
-**Checkpoints:** stage 3 by +18, stage 5 by +36, deploy started by +38, finale by +46, Q&A by +54.
+**Checkpoints:** stage 3 by +18, stage 5 by +36, finale by +46, Q&A by +54.
 
 **How you move between stages:** stay on the `main` branch the whole time (it has the latest scripts and
 `.vscode/mcp.json`) and swap only the file you build. Stage 1 is typed live. For stages 2 to 5 run
@@ -37,8 +37,8 @@ with `git checkout stage-N`.
 > show in its UI.
 
 1. Run `./scripts/preshow.sh --cloud` on the venue Wi-Fi. Expected: `ALL GREEN` (or only `git tree has changes`).
-   - Green: cloud segments (deploy, sign-in, Copilot) run live, with videos V1 to V3 on standby.
-   - Red, or API Management not available: play V3 for the deploy and V1 for the finale, and say why.
+   - Green: cloud segments (walkthrough, sign-in, Copilot) run live, with videos V1 to V3 on standby.
+   - Red, or API Management not available: play V1 for the finale (and V3 if you want to show a deploy), and say why.
 2. On `main`: `./scripts/demo.sh stage 0` and `./scripts/demo.sh reset`.
 3. Open the terminals:
 
@@ -146,7 +146,8 @@ Stages 0 to 4 and the stage 5 code run on localhost with local dev tokens: no Wi
 ## 7. Stage 5: resilience and audit (+36, 5 min)
 
 1. **Run** `./scripts/demo.sh stage 5`.
-2. **Start the deploy now** (T4, by +38): `azd deploy mcp -e mcpshow` (about 75 s). Keep going while it builds.
+2. **No redeploy needed:** this exact file already runs in Azure (CI deployed it). Optional: show a live
+   deploy with `azd deploy mcp -e mcpshow` (about 75 s, or `DEPLOY_LIVE = True` in the notebook).
 3. **Code (diff):** `attempts = 3 if method == "GET" else 1`, the `asyncio.timeout(1.5)` block,
    `AuditMiddleware` and `RateLimitingMiddleware`.
 4. **Run** `./scripts/demo.sh chaos flaky` (T4), then **Inspector:** `get_vehicle` TBA-1001 a few times →
@@ -154,9 +155,9 @@ Stages 0 to 4 and the stage 5 code run on localhost with local dev tokens: no Wi
 5. **Picture:** T2's audit lines: one JSON line per call, argument names only.
 6. **Say:** a real per-attempt deadline, retry reads only, one audit line per call.
 
-## 8. Deploy and the production walkthrough (+41, 5 min)
+## 8. Production walkthrough: the running Azure environment (+41, 5 min)
 
-1. If `azd deploy` isn't done by +43, play V3.
+1. **Say:** the file you just finished is what CI built once, scanned and promoted to this environment.
 2. **Code:** `infra/modules/apim-api.bicep` (`rate-limit-by-key` on the caller's `oid`);
    `infra/modules/platform.bicep` (`ipSecurityRestrictions`, Key Vault `publicNetworkAccess: 'Disabled'`).
 3. **Picture:** portal, API Management > APIs > dealer-mcp > Inbound processing (the policy).
@@ -192,8 +193,8 @@ Stages 0 to 4 and the stage 5 code run on localhost with local dev tokens: no Wi
 ## 10. Wrap-up (+52, 2 min)
 
 1. **Picture:** [CHECKLIST.md](CHECKLIST.md) (the production checklist), then the repo QR and the feedback QR.
-2. **Say:** take it home: everything you saw locally runs from the repo, and `azd up` deploys your own
-   copy to Azure (about 45 min, mostly API Management; README "Deploy to Azure").
+2. **Say:** take it home: everything you saw locally runs from the repo, and `workshop/deploy-azure.ipynb`
+   deploys your own copy to Azure step by step (about 45 min, mostly API Management).
 
 ## 11. Q&A (+54, 6 min)
 
@@ -201,5 +202,4 @@ Backup slides: enterprise Q&A ([section 9](DEEP-DIVE.md#9-enterprise-questions-a
 hundreds" ([section 7](../README.md#from-one-server-to-hundreds)).
 
 **If you run behind, cut in this order:** stage 0 curl (say it); stage 2 schema picture; stage 3 curl;
-stage 4 manager confirmation (say it, it's in V2); stage 5 chaos; Log Analytics in the finale; the local half of the finale (go straight to the cloud). Never start
-the deploy later than +38.
+stage 4 manager confirmation (say it, it's in V2); stage 5 chaos; Log Analytics in the finale; the local half of the finale (go straight to the cloud).

@@ -53,7 +53,7 @@ No em dashes on slides.
 
 ## 2. Fallback plan
 
-**Rule:** stages 0 to 4 and the stage 5 code are always live (localhost, no Wi-Fi). Cloud segments (deploy, Entra sign-in, Copilot) are live only if `./scripts/preshow.sh --cloud` is green on the venue Wi-Fi at T minus 45 min; otherwise play V3 and V1 and say why. The organizers recommend pre-recording demos, and this covers exactly the parts that depend on the network.
+**Rule:** stages 0 to 4 and the stage 5 code are always live (localhost, no Wi-Fi). Cloud segments (production walkthrough, Entra sign-in, Copilot) are live only if `./scripts/preshow.sh --cloud` is green on the venue Wi-Fi at T minus 45 min; otherwise play V3 and V1 and say why. The organizers recommend pre-recording demos, and this covers exactly the parts that depend on the network.
 
 Decide in under 30 seconds, say what you're doing, and keep teaching. The audience remembers the lesson,
 not the glitch.
@@ -127,7 +127,7 @@ before and after recording (it resets demo data and turns the manager role off).
 
 - [ ] `./scripts/preshow.sh --cloud` one last time (resets show data; about 1 min)
 - [ ] Editor shows `src/live/server.py` (stage 0)
-- [ ] Water, timer visible (checkpoints: stage 3 by +18, stage 5 by +36, deploy started by +38, Q&A by +54)
+- [ ] Water, timer visible (checkpoints: stage 3 by +18, stage 5 by +36, finale by +46, Q&A by +54)
 
 ### After the talk (Monday afternoon)
 
