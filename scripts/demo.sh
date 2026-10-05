@@ -43,6 +43,11 @@ case "${1:-}" in
     # Stay on main (latest scripts, docs, mcp.json); swap only the file built on stage.
     n="${2:?stage number 0-5, or done}"
     if [ "$n" = "done" ]; then git checkout main -- src/live/server.py && echo "src/live/server.py = main"; exit 0; fi
+    # A fresh clone has stage-N only as origin/stage-N, which `git checkout <ref> -- <path>` won't resolve.
+    for s in "$n" $((n - 1)); do
+      [ "$s" -ge 0 ] && ! git rev-parse -q --verify "refs/heads/stage-$s" >/dev/null &&
+        { git branch -q "stage-$s" "origin/stage-$s" 2>/dev/null || git fetch -q origin "stage-$s:stage-$s"; }
+    done
     git checkout "stage-$n" -- src/live/server.py && echo "src/live/server.py = stage $n"
     if [ "$n" -gt 0 ] && command -v code >/dev/null; then
       prev="${TMPDIR:-/tmp}/stage-$((n - 1))-server.py"
