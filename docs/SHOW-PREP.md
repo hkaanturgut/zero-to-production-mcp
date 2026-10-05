@@ -13,7 +13,7 @@ University room, **60 minutes including Q&A**. Theory from the slides, hands-on 
 ## 1. Slides outline
 
 Theory lives on the slides; the hands-on part lives in the notebooks, each cell with its own explanation.
-The deck: `MCP-DevSummit-Toronto-Kaan-Turgut.pptx`.
+The deck: [`MCP-DevSummit-Toronto-Kaan-Turgut.pptx`](MCP-DevSummit-Toronto-Kaan-Turgut.pptx).
 
 | # | Slide | When | Then |
 | --- | --- | --- | --- |

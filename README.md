@@ -78,6 +78,7 @@ $900 discount.
 | [`workshop/deploy-azure.ipynb`](workshop/deploy-azure.ipynb) | Anyone with an Azure subscription | Guided deploy of your own copy: sign in, choose subscription, name and region, deploy, test, delete |
 | [`docs/DEEP-DIVE.md`](docs/DEEP-DIVE.md) | Readers | Every practice with where it lives in the code and its official source; enterprise Q&A |
 | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | Presenter | The 60-minute plan (slides and notebooks), setup, cut order, and every stage in terminal form with recovery steps |
+| [`docs/MCP-DevSummit-Toronto-Kaan-Turgut.pptx`](docs/MCP-DevSummit-Toronto-Kaan-Turgut.pptx) | Everyone | The session's slides (the theory), with speaker notes and timings |
 | [`docs/SHOW-PREP.md`](docs/SHOW-PREP.md) | Presenter | Slides outline, fallback plan, video scripts, show-morning checklist |
 | `scripts/preshow.sh` | Presenter | One command that checks both environments, resets demo data and makes a real-token call |
 | `workshop/rehearse.py` | Presenter | Runs all 34 runbook steps and reports PASS/FAIL (`./scripts/demo.sh rehearse`) |
