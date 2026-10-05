@@ -7,3 +7,6 @@ __pycache__/
 .ruff_cache/
 # azd environments (hold generated secrets)
 .azure/
+# Office lock files (a deck open in PowerPoint) and macOS clutter
+~$*
+.DS_Store
