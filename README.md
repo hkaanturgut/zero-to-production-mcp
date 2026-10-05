@@ -262,6 +262,25 @@ on the mock. Swap in a real DMS client without touching tool code.
 
 Try it live: `./scripts/demo.sh chaos slow|errors|flaky|off` breaks the DMS on purpose.
 
+### From one server to hundreds
+
+This repo is one well-built MCP server. Uber's [MCP Gateway](https://www.uber.com/us/en/blog/designing-mcp-gateway/) (October 2026) shows
+what changes when a company runs about 800 MCP servers with 5,000+ tools: the same controls move
+to a shared place, so hundreds of teams don't each rebuild them.
+
+| Concern | One server (this repo) | Many servers (Uber's MCP Gateway) |
+| --- | --- | --- |
+| Front door | API Management in front of one server | A stateless gateway in front of all servers; config pulled from a control plane, applied without restarts |
+| Discovery | `tools/list` on one endpoint | A central registry: ownership, discovery and enablement for every server |
+| Creating tools | Hand-designed tools over the dealer API | Existing service APIs crawled and wrapped automatically; an LLM drafts the tool descriptions |
+| Approving tools | Tools and descriptions are code, reviewed in pull requests; `test_tool_contracts.py` blocks untagged tools | Every tool starts disabled; owners enable it; description changes are reviewed config diffs with rollback |
+| Sensitive data | Masked in the server, next to the data model, covered by tests | Redaction built into the gateway |
+| Token cost | Bounded outputs, 10 results per page | "Response projection": the agent asks for only the fields it needs |
+| Long tool lists | 6 to 11 tools, the full list fits | Gradual discovery (`discover_tools`, `get_tool_schema`, `invoke_tool`) and writing large results to files instead of the context |
+
+The takeaway is the same at both sizes: the hard part is the connective tissue (discovery, identity,
+security, reliability), not the model.
+
 ---
 
 ## 8. Observability and traceability
@@ -314,10 +333,22 @@ instruction; the policy refuses anyway. See [OWASP LLM01](https://genai.owasp.or
 Both are supported, and the token says which. People sign in (delegated scopes, `caller_kind: user`).
 Agents use their own managed identity with app roles (`caller_kind: app`). Agents can never be managers.
 
-**Why not pass the user's token to the backend?**
+**Why not pass the user's token to the backend? Uber's MCP Gateway relays it.**
 The [spec forbids token passthrough](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization):
 the token's audience is the MCP server, and passing it on creates confused-deputy risk. The server
 calls the backend with its own credential and forwards only the caller's ID.
+[Uber's gateway](https://www.uber.com/us/en/blog/designing-mcp-gateway/) relays an internal user token through its own service mesh and
+access-control system, inside one company's trust domain. If a backend must act as the user, the
+Entra answer is the [on-behalf-of flow](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-on-behalf-of-flow):
+the server exchanges the caller's token for a new one whose audience is the backend. The backend
+then sees the user, and no token is ever accepted outside its own audience.
+
+**Why mask personal data in the server instead of at the gateway?**
+Masking lives next to the data model, so it changes with the schema and is covered by tests
+(`test_masking`, `test_create_lead_returns_masked_data`). Rewriting MCP responses in API Management
+is a trap: Microsoft's guidance says [not to read `context.Response.Body` in MCP server policies](https://learn.microsoft.com/en-us/azure/api-management/expose-existing-mcp-server),
+because it forces response buffering and breaks streaming. A gateway that owns many servers (like
+Uber's) can still add a second redaction layer, built for streaming.
 
 **How do I revoke an agent's access?**
 Remove its app role assignment in Entra (or disable its service principal). New tokens won't carry
