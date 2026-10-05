@@ -177,6 +177,8 @@ Stages 0 to 4 and the stage 5 code run on localhost with local dev tokens: no Wi
    send the same prompt. Same answers, now through Entra and API Management in Azure.
 5. **Say:** the same file, unchanged, runs on your laptop and in production; only the identity provider
    and the front door changed.
+   If Copilot picks a different car than TBA-1017, use it: the model chooses, the server makes any choice
+   safe, and evals measure how often it chooses well (README "When the model picks the wrong tool").
 6. **Picture (if time):** Log Analytics with your cloud calls: caller, outcome, latency.
 7. **If the cloud stalls:** retry *Start* once, then play V1; if API Management is down, use `dealer-spare`.
    The local result already made the point.
