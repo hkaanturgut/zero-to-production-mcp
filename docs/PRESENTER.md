@@ -101,6 +101,10 @@ Stages 0 to 4 and the stage 5 code run on localhost with local dev tokens: no Wi
    ```
    Short on time: `./scripts/demo.sh stage 1` and walk it instead.
 2. **Run** `./scripts/demo.sh live` (T2) and `./scripts/demo.sh inspector` (T3, no persona).
+   **Say (first time on screen, 15 s):** this is MCP Inspector, the protocol's official debugging client. No model
+   in it: I call the tools myself and see exactly what any client would see. Use it while you build, and whenever
+   an agent does something odd, to tell a bad model choice from a bad server answer
+   ([RUNBOOK](RUNBOOK.md#mcp-inspector-what-why-when)).
 3. **Inspector:** `tools/list` → 2 tools. `get_vehicle` `{"stock_number": "TBA-1001"}` → raw dump with `vin`.
    `get_vehicle` `{"stock_number": "../admin"}` → error leaks `127.0.0.1:8081/admin`.
 4. **Say:** it works in 20 lines, and that's the trap: it returns everything, it lets the model do the

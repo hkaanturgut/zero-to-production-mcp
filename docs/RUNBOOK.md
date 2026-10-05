@@ -72,6 +72,35 @@ In T4 load the env once so `curl` has the key: `set -a; . ./.env; set +a`.
 
 Note: the stage 0 file has no `app`, so start T2 (`demo.sh live`) only once stage 1 has `app = mcp.http_app(...)`.
 
+### MCP Inspector: what, why, when
+
+**What:** the official debugging client from the Model Context Protocol project
+([github.com/modelcontextprotocol/inspector](https://github.com/modelcontextprotocol/inspector)). A web UI that
+connects to any MCP server (HTTP, stdio) and lets you list its tools, call them by hand through a form built from
+each tool's input schema, and see the raw JSON-RPC traffic. There is no model in it: you are the client.
+
+**Why:** a chat client puts a model between you and the server, so when something goes wrong you can't tell whether
+the model chose badly or the server answered badly. Inspector removes the model. You see exactly what any client
+sees: the tool list for this caller, every schema, the structured result, `isError` responses, the 401 and its
+`www-authenticate` header, and the confirmation prompt for costly actions.
+
+**When:**
+
+| Situation | What Inspector shows |
+| --- | --- |
+| Building a tool | Name, description and schemas are what you meant; the result matches the output schema |
+| Copilot did something odd | Replay its exact call: if the server answers correctly, the problem is the prompt or the tool description |
+| Checking permissions | Restart with another persona: tools you may not use disappear from `tools/list` |
+| Checking auth | No token: 401 plus where to sign in; with a token: the caller the server sees |
+| Before connecting a real client | One clean pass over every tool, including errors and confirmations |
+| In CI or a script | `npx @modelcontextprotocol/inspector --cli <url> --transport http --method tools/list` (same calls, no UI) |
+
+**How:** `./scripts/demo.sh inspector salesperson` opens it already connected to `:8080/mcp` with a local token
+(restart with `manager`, `agent` or `readonly` to switch). **Tools** tab > pick a tool > fill the form > **Run Tool**;
+the right panel's **Protocol** tab shows the JSON-RPC messages, **Network** the HTTP requests. The **Prompts** tab
+lists MCP prompt templates (this server has none); natural-language prompts belong in Copilot, not here.
+Inspector and Copilot are separate clients: Inspector doesn't see Copilot's calls, but T2's audit log shows both.
+
 ---
 
 ## Intro (3 min)

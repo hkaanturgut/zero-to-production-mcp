@@ -257,22 +257,59 @@ md("""
 **Now as a manager:** *MCP: Reset Cached Inputs*, then restart `dealer-local` and paste the manager token below.
 Ask Copilot to apply the same $900 discount to TBA-1017: VS Code asks you to confirm before the server applies it,
 and `delete_lead` now shows in the tool list.
-
-**Next:** the same server, deployed in Azure behind API Management: [azure.ipynb](azure.ipynb).
 """)
 code(r'''
 print(rh.token("manager"))
 ''')
 
 md("""
+## 8. Look inside with MCP Inspector (optional)
+
+**What:** the official debugging client from the MCP project. A web page that connects to your server, lists its
+tools and lets you call them by hand through a form built from each tool's schema. There is no model in it: you
+are the client, so you see exactly what Copilot sees, without the model's choices in between.
+
+**Why and when:** while building a tool (schemas, results, errors); when Copilot does something odd (replay its
+call: if the server answers correctly, the prompt or the tool description is the problem); to check permissions
+(another persona, another tool list) and auth (no token: 401 and where to sign in).
+
+**How:** run the cell below; Inspector opens in your browser, already connected with a salesperson token.
+*Tools* > pick a tool > fill the form > *Run Tool*. The right panel's *Protocol* tab shows the raw JSON-RPC.
+Natural-language prompts belong in Copilot: Inspector's *Prompts* tab lists MCP prompt templates (this server has none).
+
+| Tool | Arguments | Shows |
+| --- | --- | --- |
+| `quote_price` | `TBA-1017` | all-in 20209.5, every fee: the math lives in the server |
+| `get_vehicle` | `../admin` | rejected by the schema before it reaches the dealer system |
+| `create_lead` | Priya, Natarajan, `416-555-0142` | name and phone come back masked |
+| `apply_discount` | `TBA-1001`, `900`, `loyal customer` | salesperson: needs a sales manager. As manager: a confirmation prompt |
+
+Inspector and Copilot are separate clients: Inspector doesn't see Copilot's calls, the audit log above shows both.
+""")
+code(r'''
+if not AUTO:
+    background("inspector", ["./scripts/demo.sh", "inspector", "salesperson"], "http://127.0.0.1:6274")
+    log_tail("inspector", n=3, grep="6274")                      # the URL, if the browser didn't open
+''')
+code(r'''
+# Same page as a manager: delete_lead appears, the $900 discount asks you to confirm.
+if not AUTO:
+    background("inspector", ["./scripts/demo.sh", "inspector", "manager"], "http://127.0.0.1:6274")
+''')
+
+md("""
+**Next:** the same server, deployed in Azure behind API Management: [azure.ipynb](azure.ipynb).
+""")
+
+md("""
 ## Cleanup (after the talk)
 """)
 code(r'''
 # Run All reaches this cell too: it asks first, so Copilot keeps its server unless you say y.
-if AUTO or input("Stop the local servers (Copilot loses dealer-local)? [y/N] ").strip().lower().startswith("y"):
+if AUTO or input("Stop the local servers and Inspector (Copilot loses dealer-local)? [y/N] ").strip().lower().startswith("y"):
     for name in list(RUNNING):
         stop_bg(name)
-    run("lsof -ti tcp:8080,8081 -sTCP:LISTEN | xargs kill 2>/dev/null")  # also orphans from an earlier kernel
+    run("lsof -ti tcp:8080,8081,6274,6275 -sTCP:LISTEN | xargs kill 2>/dev/null")  # also orphans from an earlier kernel
     run("./scripts/demo.sh stage done")
     print("stopped; src/live/server.py is back to main")
 else:
