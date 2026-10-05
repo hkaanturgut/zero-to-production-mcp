@@ -1,6 +1,6 @@
 # Stage runbook: From Zero to Production MCP Server
 
-**Turn Any API Into an Agent Tool.** MCP Dev Summit Toronto, Mon 5 Oct 2026. **60 minutes, Q&A included.** The step-by-step stage script is [PRESENTER.md](PRESENTER.md); this runbook keeps the full detail per stage (every paste block and expected output) for practice and recovery.
+**Turn Any API Into an Agent Tool.** MCP Dev Summit Toronto, Mon 5 Oct 2026. **60 minutes, Q&A included.** On stage you have two things open: the slide deck (theory) and VS Code with [`workshop/demo.ipynb`](../workshop/demo.ipynb) then [`workshop/azure.ipynb`](../workshop/azure.ipynb) (hands-on; each cell carries its own explanation). This runbook stays off screen: timing, setup, fallbacks, and the terminal version of every stage (every paste block and expected output) for practice and recovery.
 
 You build `src/live/server.py` from an empty file to the production server, one stage at a time,
 then deploy it to Azure and call it from VS Code + GitHub Copilot with a real Microsoft Entra sign-in.
@@ -20,31 +20,50 @@ If a paste goes wrong, `cp workshop/stages/stage_N.py src/live/server.py` (the s
 
 ## Timing
 
-| # | Segment | Min | Starts | Running |
-| --- | --- | --- | --- | --- |
-| | Intro | 3 | +0 | 3 |
-| 0 | The internal API | 2 | +3 | 5 |
-| 1 | First tools (typed live) | 7 | +5 | 12 |
-| 2 | Tools the model can use | 6 | +12 | 18 |
-| 3 | Auth, identity, PII | 9 | +18 | 27 |
-| 4 | Least privilege, policy, confirmation | 9 | +27 | 36 |
-| 5 | Resilience, audit | 5 | +36 | 41 |
-| | Production walkthrough (running Azure environment) | 5 | +41 | 46 |
-| | Finale: Copilot on the deployed server | 6 | +46 | 52 |
-| | Wrap-up | 2 | +52 | 54 |
-| | Q&A | 6 | +54 | 60 |
+| Segment | Where | Min | Starts |
+| --- | --- | --- | --- |
+| Title, about me, the problem, MCP in front of your API, 2026-07-28, showcase, end state, one request end to end | Slides 1 to 9 | 8 | +0 |
+| Stage 0: the internal API | `demo.ipynb` §1 | 2 | +8 |
+| Stage 1: first tools (typed live) | `demo.ipynb` §2 | 6 | +10 |
+| Stage 2: tools the model can use | `demo.ipynb` §3 | 5 | +16 |
+| Stage 3: identity and personal data | `demo.ipynb` §4 | 7 | +21 |
+| Stage 4: least privilege and confirmation (slide 10 when you reach the policy) | `demo.ipynb` §5 | 7 | +28 |
+| Stage 5: resilience and audit | `demo.ipynb` §6 | 4 | +35 |
+| Copilot on the local server | `demo.ipynb` §7 | 4 | +39 |
+| From commit to Azure | Slide 11 | 1 | +43 |
+| The running Azure environment: lock-down, a real Entra call | `azure.ipynb` §1 to §3 | 4 | +44 |
+| Finale: Copilot on `dealer-cloud` (slide 12 as backup) | `azure.ipynb` §4 | 4 | +48 |
+| Checklist, take home, thank you | Slides 13 to 15 | 2 | +52 |
+| Q&A (`demo.ipynb` §8 Inspector if asked) | | 6 | +54 |
 
-Checkpoints: stage 3 by **+18**, stage 5 by **+36**, finale by **+46**, Q&A by **+54**. The finished server already runs in Azure (deployed by CI): a live `azd deploy` is optional.
+Checkpoints: notebook open by **+8**, stage 3 by **+21**, stage 5 by **+35**, Azure by **+43**, Q&A by **+54**. The finished server already runs in Azure (deployed by CI): a live `azd deploy` is optional (`DEPLOY_LIVE` in `azure.ipynb`).
 
-**60-minute flow:** stay on `main`; type stage 1 live; for stages 2 to 5 run `./scripts/demo.sh stage N`
-(sets `src/live/server.py` to stage N and opens the VS Code diff against N-1) and walk the key lines.
+**If you run behind, cut in this order:** the stage 0 call (say it); the stage 2 schema walk; the stage 3 token
+decode; the stage 4 manager confirmation (say it, it's in V2); the stage 5 chaos loop; the manager half of §7;
+`azure.ipynb` §3 (go straight to the cloud finale); the local Copilot run in §7 (the cloud finale makes the point).
+
+**60-minute flow:** stay on `main`; type stage 1 live; each notebook `stage(N)` cell runs `./scripts/demo.sh stage N`
+(sets `src/live/server.py` to stage N and opens the VS Code diff against N-1) and you walk the key lines.
 The TYPE and PASTE instructions below are the full-length version, for practice.
 
 ---
 
 ## Before you go on stage
 
-### Pre-flight (T minus 30 min)
+### Pre-flight (T minus 45 min)
+
+1. `./scripts/preshow.sh --cloud` on the venue Wi-Fi. Expected: `ALL GREEN` (or only `git tree has changes`).
+   Green: the cloud part runs live, with videos V1 to V3 on standby. Red, or API Management not available:
+   play V1 for the finale (and V3 to show a deploy), and say why.
+2. VS Code: `workshop/demo.ipynb` (kernel `.venv`), *Restart*, then run Setup only. Ports must be free; if not,
+   run Cleanup and answer `y`. Open `workshop/azure.ipynb` and run its Setup (signs in, finds `mcpshow`).
+3. Browser tabs: the Azure portal on `rg-mcpshow` (API Management > APIs > dealer-mcp > Inbound processing) and
+   Log Analytics with the query from [README "See every call"](../README.md#see-every-call).
+4. The deck in presenter view on the other screen, starting at slide 1.
+
+Stages 0 to 5 and the local Copilot run need no Wi-Fi: localhost and local test tokens only.
+
+The terminal setup below is the same session without the notebook:
 
 ```bash
 git checkout stage-0                      # src/live/server.py is the one-line docstring

@@ -1,7 +1,7 @@
 # Show prep: MCP Dev Summit Toronto, Mon 5 Oct 2026
 
 Session: "From Zero to Production MCP Server: Turn Any API Into an Agent Tool".
-University room, **60 minutes including Q&A**. Stage script: [PRESENTER.md](PRESENTER.md); full detail: [RUNBOOK.md](RUNBOOK.md).
+University room, **60 minutes including Q&A**. Theory from the slides, hands-on in `workshop/demo.ipynb` and `workshop/azure.ipynb`; timing, setup and fallbacks: [RUNBOOK.md](RUNBOOK.md).
 
 1. [Slides outline](#1-slides-outline)
 2. [Fallback plan](#2-fallback-plan)
@@ -12,26 +12,29 @@ University room, **60 minutes including Q&A**. Stage script: [PRESENTER.md](PRES
 
 ## 1. Slides outline
 
-Keep slides to the frame around the live build; the code is the content.
+Theory lives on the slides; the hands-on part lives in the notebooks, each cell with its own explanation.
+The deck: `MCP-DevSummit-Toronto-Kaan-Turgut.pptx`.
 
-| # | Slide | Content | Visual |
+| # | Slide | When | Then |
 | --- | --- | --- | --- |
-| 1 | Title (up while people arrive) | Session title, name, MCP Dev Summit Toronto 2026, and the setup line: `git clone https://github.com/hkaanturgut/zero-to-production-mcp && cd zero-to-production-mcp && ./scripts/demo.sh setup` | Repo QR, large: early arrivals start downloading |
-| 2 | The problem | Every company has internal APIs. Agents need them. A naive wrapper leaks data, trusts the model and falls over. | Three red marks on a "wrapper" box |
-| 3 | The pattern | An MCP server in front of the internal API: identity in, policy in code, minimum data out | Agent → MCP server → internal API |
-| 4 | What changed in MCP 2026-07-28 | Stateless (no initialize), multi round-trip confirmation (`InputRequiredResult`), CIMD replaces dynamic registration, Roots/Sampling/Logging deprecated | Four tiles, one per change |
-| 5 | Today's showcase | Fictional Toronto used-car dealer, synthetic data (40 cars, 20 leads). The dealer is the showcase; the patterns are the point. | Dealer card |
-| 6 | Architecture | Where we end up: API Management front door, private network, private Key Vault and ACR | `docs/architecture.svg` |
-| 7 | The build plan | Stage 0 to 5, one production lesson each (see the table below) | Stage ladder |
-| | **Live build** | Stages 0 to 5 | Editor + terminal |
-| 8 | From commit to Azure | PR checks, build once, promote the same digest, OIDC (no secrets) | Pipeline strip from the architecture page |
-| 9 | Finale | VS Code + Copilot, real Entra sign-in, $900 refused | Live |
-| 10 | Production checklist | Identity, least privilege, secrets, tool quality, failure and operations | `docs/CHECKLIST.md` as 5 columns |
-| 11 | Take it home | Repo QR, feedback QR, "Deploy your own: `azd up`", "Questions?" | Two QR codes |
-| B1 | Backup: enterprise Q&A | deep dive §9 headlines (docs/DEEP-DIVE.md) (incl. token relay vs on-behalf-of, masking in the server) | Text |
-| B2 | Backup: from one server to hundreds | README "From one server to hundreds" diagram: this repo vs Uber's MCP Gateway (800 servers, 5,000+ tools) | Two-column table |
+| 1 | From Zero to Production MCP Server (up while people arrive) | +0 | |
+| 2 | About me | +0:30 | |
+| 3 | Every company has APIs. Agents need them | +1 | |
+| 4 | MCP sits in front of your API | +2 | |
+| 5 | What changed in MCP 2026-07-28 | +3 | |
+| 6 | Today's showcase: a Toronto used-car dealer | +4:30 | |
+| 7 | Where we end up (architecture) | +5:30 | |
+| 8 | One request, end to end | +6:30 | |
+| 9 | Let's build it (repo QR) | +7:30 | VS Code: `demo.ipynb` §1 to §7 |
+| 10 | Policy in code, not in the prompt | during stage 4 (+28) | back to `demo.ipynb` §5 |
+| 11 | From commit to Azure | +43 | `azure.ipynb` §1 to §4 |
+| 12 | Finale: Copilot calls our server in Azure | backup for `azure.ipynb` §4 (+48) | |
+| 13 | The production checklist | +52 | |
+| 14 | What to take home | +53 | |
+| 15 | Thank you. Questions? | +54 | Q&A |
+| 16 | Backup | Q&A | |
 
-Stage ladder for slide 7:
+Stage ladder (also the first cell of `demo.ipynb`):
 
 | Stage | Adds | Production lesson |
 | --- | --- | --- |

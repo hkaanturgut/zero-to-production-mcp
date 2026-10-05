@@ -134,7 +134,7 @@ One request, end to end:
 | Telemetry | Log Analytics + Application Insights | Console logs and audit lines; optional OpenTelemetry |
 | Sign-in | Microsoft Entra app `dealer-mcp-<env>` | 2 scopes, 3 app roles, VS Code and Azure CLI pre-authorized |
 
-Design notes: [docs/HLD.md](HLD.md). Stage runbook: [docs/RUNBOOK.md](RUNBOOK.md). Presenter guide: [docs/PRESENTER.md](PRESENTER.md). Show prep and fallbacks: [docs/SHOW-PREP.md](SHOW-PREP.md).
+Design notes: [docs/HLD.md](HLD.md). Stage runbook: [docs/RUNBOOK.md](RUNBOOK.md). Show prep and fallbacks: [docs/SHOW-PREP.md](SHOW-PREP.md).
 
 ---
 

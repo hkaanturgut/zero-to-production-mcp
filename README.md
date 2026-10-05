@@ -77,8 +77,7 @@ $900 discount.
 | [`workshop/azure.ipynb`](workshop/azure.ipynb) | Anyone with access to a deployment | The deployed version: the lock-down behind API Management, a real Entra call, Copilot on `dealer-cloud`. Read-only by default |
 | [`workshop/deploy-azure.ipynb`](workshop/deploy-azure.ipynb) | Anyone with an Azure subscription | Guided deploy of your own copy: sign in, choose subscription, name and region, deploy, test, delete |
 | [`docs/DEEP-DIVE.md`](docs/DEEP-DIVE.md) | Readers | Every practice with where it lives in the code and its official source; enterprise Q&A |
-| [`docs/PRESENTER.md`](docs/PRESENTER.md) | Presenter | The 60-minute stage script: what to run, show, say, and when |
-| [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | Presenter | Full per-stage detail: every paste block, expected output and recovery step |
+| [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | Presenter | The 60-minute plan (slides and notebooks), setup, cut order, and every stage in terminal form with recovery steps |
 | [`docs/SHOW-PREP.md`](docs/SHOW-PREP.md) | Presenter | Slides outline, fallback plan, video scripts, show-morning checklist |
 | `scripts/preshow.sh` | Presenter | One command that checks both environments, resets demo data and makes a real-token call |
 | `workshop/rehearse.py` | Presenter | Runs all 34 runbook steps and reports PASS/FAIL (`./scripts/demo.sh rehearse`) |
@@ -551,4 +550,5 @@ The full reference, with every practice, where the repo implements it, and the o
 components · all 11 tools · security controls with tests · development · operations · scalability ·
 observability · enterprise questions answered · AI engineering lessons.
 
-Presenting this workshop yourself? Follow [docs/PRESENTER.md](docs/PRESENTER.md).
+Presenting this workshop yourself? Present the theory from slides, run [`workshop/demo.ipynb`](workshop/demo.ipynb) and
+[`workshop/azure.ipynb`](workshop/azure.ipynb) for the hands-on part, and keep [docs/RUNBOOK.md](docs/RUNBOOK.md) for timing and fallbacks.

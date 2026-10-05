@@ -21,12 +21,22 @@ def code(text: str) -> None:
 md("""
 # Zero to Production MCP: build it locally
 
-Run each cell in order with ▶ (or *Run All*). Everything runs on your machine: the cells start the dealer
-system and the MCP server, switch stages and make every call; their logs are in `.dev/notebook/`. At the end
-you connect GitHub Copilot to the server you just built. No Azure needed: the deployed version is
-[azure.ipynb](azure.ipynb). Timings follow [docs/PRESENTER.md](../docs/PRESENTER.md).
+We turn a plain internal REST API into an MCP server a security team would approve, one stage at a time:
+each stage fixes one production problem. Everything here runs on your machine: the cells start the dealer
+system and the MCP server, swap `src/live/server.py` to the next stage (VS Code opens the diff) and make the
+calls. At the end you connect GitHub Copilot to the server you built. The deployed version is [azure.ipynb](azure.ipynb).
 
-**Kernel:** pick the repo's `.venv` (Python) when VS Code asks.
+| Stage | Adds | Production lesson |
+| --- | --- | --- |
+| 0 | The internal API | MCP sits in front of your API; it doesn't replace it |
+| 1 | `search_inventory`, `get_vehicle` | The naive wrapper leaks data and trusts its input |
+| 2 | Typed inputs, output schemas, `quote_price` | Schemas are the contract; business math lives in code |
+| 3 | Entra token validation, `create_lead`, masking | Identity comes from the token; personal data is masked |
+| 4 | Permission per tool, discount policy, confirmation | Least privilege; costly actions need a human |
+| 5 | Timeouts, read-only retries, audit, rate limit | Fail fast, retry reads only, trace every call |
+
+Run each cell in order with ▶ (or *Run All*); logs are in `.dev/notebook/`. Times like `+8` are minutes into
+the 60-minute session. **Kernel:** pick the repo's `.venv` (Python) when VS Code asks.
 """)
 
 code(r'''
@@ -121,9 +131,10 @@ print("ready")
 ''')
 
 md("""
-## 1. Stage 0: the internal API (+3)
+## 1. Stage 0: the internal API (+8)
 
-A plain REST API with one shared key, like most internal systems. **Say:** MCP doesn't replace it; it sits in front.
+The dealer's system: a plain REST API with one shared key, like most internal systems. It returns everything,
+VIN included, to anyone holding the key. MCP doesn't replace it: we build a layer we own in front of it.
 """)
 code(r'''
 background("dms", ["uv", "run", "dms"], "http://127.0.0.1:8081/healthz")
@@ -133,10 +144,13 @@ show(httpx.get(f"{rh.DMS}/vehicles?limit=1", headers={"X-API-Key": key}).json()[
 ''')
 
 md("""
-## 2. Stage 1: first tools (+5)
+## 2. Stage 1: first tools (+10)
 
-Type the tools in `src/live/server.py` (see the presenter guide), **or** run `stage(1)` below.
-Then start the server and show the three problems.
+The naive version: two tools in about 20 lines of `src/live/server.py` (typed live; the imports, `DMS_URL` and
+`DMS_KEY` are in `workshop/snippets/stage_1.txt`). Or run `stage(1)` below to get the same file.
+
+It works, and that's the trap: it returns everything, leaves the price math to the model, lets untyped input
+walk the URL, and anyone can call it. The next three cells show it.
 """)
 code(r'''
 stage(1)          # skip this line if you typed stage 1 yourself
@@ -151,9 +165,13 @@ await call("get_vehicle", {"stock_number": "../admin"})        # problem 3: path
 ''')
 
 md("""
-## 3. Stage 2: tools the model can use (+12)
+## 3. Stage 2: tools the model can use (+16)
 
-**Code (diff):** `StockNumber`, the `Vehicle` / `SearchResult` / `Quote` models, `quote_price`.
+**In the diff:** `StockNumber` (a pattern, so `../admin` can't get in), the `Vehicle` / `SearchResult` / `Quote`
+output models (only the fields the model needs: no VIN), and `quote_price` calling `all_in_quote`
+(`src/server/domain/pricing.py`).
+
+**Why:** the schema is the contract. Return the minimum, and keep business math in code, never in the model.
 """)
 code(r'''
 stage(2)
@@ -166,9 +184,14 @@ print(httpx.get("http://127.0.0.1:8080/healthz").json())
 ''')
 
 md("""
-## 4. Stage 3: identity and personal data (+18)
+## 4. Stage 3: identity and personal data (+21)
 
-**Code (diff):** `ROLES` + `EntraVerifier`, `build_auth()` with `ENTRA_API_URI`, `caller()`, `mask_lead`.
+**In the diff:** `ROLES` + `EntraVerifier` (people's scopes and agents' app roles become one permission set),
+`build_auth()` with `ENTRA_API_URI`, `caller()` (who is calling, from the token), and `mask_lead`.
+
+**Why:** the server is an OAuth resource server. Without a token the 401 tells any client where to sign in
+(steps 1, 2 and 4 of "One request, end to end"). Identity comes from the token, never from tool arguments,
+and personal data is masked before the model sees it. Locally we sign test tokens ourselves; in Azure, Entra does.
 """)
 code(r'''
 stage(3)
@@ -184,9 +207,13 @@ await call("create_lead", {"first_name": "Priya", "last_name": "Natarajan", "pho
 ''')
 
 md("""
-## 5. Stage 4: least privilege and human confirmation (+27)
+## 5. Stage 4: least privilege and human confirmation (+28)
 
-**Code (diff):** the three `restrict_tag(...)` lines, the 15% / $500 policy in `apply_discount`, `confirmation()`.
+**In the diff:** the three `restrict_tag(...)` lines (one permission per tool), the 15% / $500 policy in
+`apply_discount`, and `confirmation()` (`src/server/tools/common.py`).
+
+**Why** (slide 10, "Policy in code"): tools you may not use aren't even listed. A customer note that says "apply a $9,000 discount" is data,
+never an instruction: the policy lives in code, where the model can't talk past it. Costly actions need a human.
 """)
 code(r'''
 stage(4)
@@ -202,16 +229,21 @@ await call("apply_discount", {"stock_number": "TBA-1001", "amount": 900, "reason
            persona="salesperson")                                # needs a sales manager
 ''')
 code(r'''
-# The manager asks for the same $900: the server pauses and asks you (answer y or n).
+# The manager asks for the same $900: the server pauses and asks a human (answer y or n).
+# On 2026-07-28 clients this is InputRequiredResult; older clients get the same rule through elicitation.
 await call("apply_discount", {"stock_number": "TBA-1001", "amount": 900, "reason": "loyal customer"},
            persona="manager", confirm=True)
 ''')
 
 md("""
-## 6. Stage 5: resilience and audit (+36)
+## 6. Stage 5: resilience and audit (+35)
 
-**Code (diff):** `attempts = 3 if method == "GET" else 1`, the `asyncio.timeout(1.5)` block,
-`AuditMiddleware` and `RateLimitingMiddleware`.
+**In the diff:** `attempts = 3 if method == "GET" else 1`, the `asyncio.timeout(1.5)` block, `AuditMiddleware`
+and `RateLimitingMiddleware`.
+
+**Why:** a real deadline per attempt, retry reads only (a retried write could apply a discount twice), and one
+audit line per call: who, which tool, outcome, latency, argument names but never values. This exact file is what
+CI deployed to Azure.
 """)
 code(r'''
 stage(5)
@@ -227,9 +259,10 @@ log_tail("live", n=4, grep="tool_call")                          # one audit lin
 ''')
 
 md("""
-## 7. Connect your chat to the server you built (+41)
+## 7. Connect your chat to the server you built (+39)
 
-The server from stage 5 is still running on `http://127.0.0.1:8080/mcp`. Now a real client uses it.
+The server from stage 5 is still running on `http://127.0.0.1:8080/mcp`. Now a real client uses it: this time
+the model decides which tools to call, and the server decides what is allowed.
 
 1. Run the cell below: fresh demo data and a **salesperson** token.
 2. VS Code: *MCP: List Servers* > `dealer-local` > *Start*, and paste the token when asked.
@@ -239,7 +272,7 @@ The server from stage 5 is still running on `http://127.0.0.1:8080/mcp`. Now a r
 
 **Expected:** TBA-1017 (2021 Tiguan), all-in **$20,209.50**, the lead saved with a masked phone, and
 **"Discounts over $500 need a sales manager."** If Copilot picks another car, use it: the model chooses,
-the server keeps every choice safe.
+the server keeps every choice safe, and evals measure how often it chooses well.
 """)
 code(r'''
 rh.reset()
@@ -254,16 +287,19 @@ log_tail("live", n=10, grep="tool_call")
 ''')
 
 md("""
-**Now as a manager:** *MCP: Reset Cached Inputs*, then restart `dealer-local` and paste the manager token below.
+**Now as a manager (if time):** *MCP: Reset Cached Inputs*, then restart `dealer-local` and paste the manager token below.
 Ask Copilot to apply the same $900 discount to TBA-1017: VS Code asks you to confirm before the server applies it,
 and `delete_lead` now shows in the tool list.
+
+**Next (+43):** back to the slides for "From commit to Azure", then the same file deployed in Azure:
+[azure.ipynb](azure.ipynb). Section 8 below is for after the talk.
 """)
 code(r'''
 print(rh.token("manager"))
 ''')
 
 md("""
-## 8. Look inside with MCP Inspector (optional)
+## 8. Look inside with MCP Inspector (after the talk, or in Q&A)
 
 **What:** the official debugging client from the MCP project. A web page that connects to your server, lists its
 tools and lets you call them by hand through a form built from each tool's schema. There is no model in it: you
@@ -296,10 +332,6 @@ code(r'''
 if not AUTO:
     background("inspector", ["./scripts/demo.sh", "inspector", "manager"], "http://127.0.0.1:6274")
 ''')
-
-md("""
-**Next:** the same server, deployed in Azure behind API Management: [azure.ipynb](azure.ipynb).
-""")
 
 md("""
 ## Cleanup (after the talk)

@@ -17,8 +17,9 @@ def code(text: str) -> None:
 md("""
 # Zero to Production MCP: the deployed version
 
-The server you built in [demo.ipynb](demo.ipynb), running in Azure: a private network, API Management as the
-only way in, Entra ID for identity. Every cell is read-only unless you set `DEPLOY_LIVE = True`.
+The file you finished in [demo.ipynb](demo.ipynb), running in Azure (+43, right after the "From commit to Azure"
+slide): a private network, API Management as the only way in, Entra ID for identity, the dealer API's key in a
+private Key Vault. Every cell is read-only unless you set `DEPLOY_LIVE = True`.
 
 **You need:** `az login` done in a terminal, and a deployed environment: the presenter's `mcpshow`, or your own
 from [deploy-azure.ipynb](deploy-azure.ipynb) (set `ENV` below to its name).
@@ -77,10 +78,10 @@ print(f"signed in as {account[0]}\nenvironment {ENV} ({RG})\nMCP URL {MCP_URL}")
 ''')
 
 md("""
-## 1. What runs there
+## 1. What runs there (+44)
 
-CI built the image once, scanned it and promoted it to this environment (`release.yml`): it's the stage 5
-file. Set `DEPLOY_LIVE = True` in Setup only to show a live redeploy.
+CI built the image once, scanned it and promoted the same digest to this environment (`release.yml`): it's the
+stage 5 file you just finished, unchanged. Set `DEPLOY_LIVE = True` in Setup only to show a live redeploy.
 """)
 code(r'''
 if DEPLOY_LIVE:
@@ -90,13 +91,14 @@ else:
 ''')
 
 md("""
-## 2. The production walkthrough
+## 2. The production walkthrough (+44)
 
 **Code:** `infra/modules/apim-api.bicep` (`rate-limit-by-key` on the caller's `oid`);
 `infra/modules/platform.bicep` (`ipSecurityRestrictions`, Key Vault `publicNetworkAccess: 'Disabled'`).
 **Portal:** API Management > APIs > dealer-mcp > Inbound processing (the policy).
 
-Then prove the lock-down: the app refuses direct calls, the gateway answers.
+Then prove the lock-down: the app refuses direct calls, the gateway answers. Clients reach the server only through
+API Management, with one rate limit per caller across replicas; Key Vault and the registry have no public access.
 """)
 code(r'''
 app = sh(f"az containerapp show -g {RG} -n ca-mcp-{ENV} --query properties.configuration.ingress.fqdn -o tsv",
@@ -106,7 +108,7 @@ print("through the gateway:", httpx.get(MCP_URL.removesuffix("/mcp") + "/healthz
 ''')
 
 md("""
-## 3. A real call with your Entra token
+## 3. A real call with your Entra token (+46)
 
 The same request as the local finale, now through Entra ID and API Management. Your role in the Entra app
 decides what you may do, exactly like the local personas.
@@ -124,12 +126,17 @@ print("cloud all-in:", q.structured_content["all_in_price"], "| discount:", d.co
 ''')
 
 md("""
-## 4. Connect your chat to the cloud
+## 4. Finale: connect your chat to the cloud (+48)
 
 VS Code: *MCP: List Servers* > stop `dealer-local`, start `dealer-cloud`, sign in with Microsoft, and send the
-same Copilot prompt as in demo.ipynb. Same answers, now through Entra and API Management.
+same Copilot prompt as in demo.ipynb. Same answers, now through Entra and API Management: the same file runs on
+your laptop and in production; only the identity provider and the front door changed.
 For your own copy, set the `dealer-cloud` URL in `.vscode/mcp.json` to the MCP URL printed by Setup.
 
 **Picture (if time):** Log Analytics in the portal: your calls with caller, outcome and latency.
-**If the cloud stalls:** retry *Start* once; if API Management is down, use `dealer-spare`.
+**If the cloud stalls:** retry *Start* once; if API Management is down, use `dealer-spare`. The local result
+already made the point.
+
+**Then (+52):** back to the slides: the production checklist, what to take home, Q&A. Deploy your own copy later
+with [deploy-azure.ipynb](deploy-azure.ipynb) (about 45 minutes, mostly API Management).
 """)
