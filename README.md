@@ -539,7 +539,7 @@ infra/          main.bicep + modules: network, apim, apim-api, platform, entra, 
 workshop/       demo.ipynb, azure.ipynb, deploy-azure.ipynb, stage files 0-5, paste snippets, rehearsal script
 scripts/        demo.sh, preshow.sh, smoke.sh, CI and azd hooks
 .github/        ci.yml (PR checks + what-if), release.yml (dev, then prod)
-docs/           deep dive, presenter guide, runbook, show prep, HLD, checklist, architecture.svg
+docs/           deep dive, runbook, show prep, HLD, checklist, slide deck, architecture.svg (+ .png)
 ```
 
 ---
