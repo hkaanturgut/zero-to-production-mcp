@@ -268,11 +268,15 @@ md("""
 ## Cleanup (after the talk)
 """)
 code(r'''
-for name in list(RUNNING):
-    stop_bg(name)
-run("lsof -ti tcp:8080,8081 -sTCP:LISTEN | xargs kill 2>/dev/null")  # also orphans from an earlier kernel
-run("./scripts/demo.sh stage done")
-print("stopped; src/live/server.py is back to main")
+# Run All reaches this cell too: it asks first, so Copilot keeps its server unless you say y.
+if AUTO or input("Stop the local servers (Copilot loses dealer-local)? [y/N] ").strip().lower().startswith("y"):
+    for name in list(RUNNING):
+        stop_bg(name)
+    run("lsof -ti tcp:8080,8081 -sTCP:LISTEN | xargs kill 2>/dev/null")  # also orphans from an earlier kernel
+    run("./scripts/demo.sh stage done")
+    print("stopped; src/live/server.py is back to main")
+else:
+    print("still running: dealer-local on :8080, the dealer system on :8081")
 ''')
 
 
