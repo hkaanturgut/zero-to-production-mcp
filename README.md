@@ -14,7 +14,7 @@ A fictional Toronto used-car dealer is the showcase; the patterns are the point.
 **Contents:** [Follow the workshop](#follow-the-workshop) · [Why MCP](#why-mcp) · [How MCP talks](#how-mcp-talks) ·
 [One request, end to end](#one-request-end-to-end) · [The build](#the-build-six-stages) ·
 [Who can do what](#who-can-do-what) · [Every call passes these gates](#every-call-passes-these-gates) ·
-[Human confirmation](#human-confirmation) · [When the backend fails](#when-the-backend-fails) ·
+[Wrong tool](#when-the-model-picks-the-wrong-tool) · [Human confirmation](#human-confirmation) · [When the backend fails](#when-the-backend-fails) ·
 [Ship it](#ship-it) · [See every call](#see-every-call) · [From one server to hundreds](#from-one-server-to-hundreds) ·
 [Run it](#run-it) · [Deep dive](#deep-dive)
 
@@ -68,7 +68,11 @@ $900 discount.
 
 ## Why MCP
 
-**MCP doesn't replace your REST API. It sits in front of it**, so every AI app can use it safely.
+**MCP doesn't replace your REST API. It sits in front of it.** A REST API is built for a developer who
+reads the docs and decides what to call. An agent decides at runtime, can be tricked by the data it reads,
+and every AI app (VS Code, Claude, a Foundry agent) would otherwise need its own integration, sign-in and
+rules for every API. An MCP server gives all of them one standard way to discover and call your tools, and
+one place to enforce who may do what.
 
 ```mermaid
 flowchart LR
@@ -99,6 +103,11 @@ flowchart LR
 | Rules | In the prompt | In code: holds against prompt injection |
 | Risky actions | Just called | A human confirms first |
 
+With N apps and M APIs, direct integration means N × M custom connections; with MCP each app speaks MCP
+once and each API gets one server, N + M. One app of yours calling one API? Plain function calling is
+fine. MCP pays off when several AI apps or agents share a system, callers have different permissions, or
+you must prove who did what.
+
 ## How MCP talks
 
 MCP uses **[JSON-RPC 2.0](https://www.jsonrpc.org/specification)**: a request names a `method` and `params`
@@ -125,6 +134,9 @@ a broken request gets a JSON-RPC `error`. **Spec 2026-07-28:** stateless (no `in
 round-trip for human input, CIMD instead of dynamic client registration, Roots/Sampling/Logging deprecated.
 
 ## One request, end to end
+
+The whole security story in one picture: every request is rate-limited, authenticated, permission-checked
+and audited, and the server reaches the backend with its own credential, never the user's token.
 
 ```mermaid
 sequenceDiagram
@@ -153,6 +165,9 @@ The dealer API key comes from Key Vault over a private endpoint; the user's toke
 
 ## The build: six stages
 
+Each stage fixes what the previous one got wrong. The stage 1 server works in 20 lines but is unsafe;
+stages 2 to 5 turn it into something you can run in production.
+
 ```mermaid
 flowchart LR
   s0["0 Empty file<br/>the internal API"] --> s1["1 First tools<br/>works, but leaks"]
@@ -166,6 +181,10 @@ flowchart LR
 Each stage is a branch (`stage-0` to `stage-5`) with the finished file.
 
 ## Who can do what
+
+People and agents sign in differently: people carry delegated scopes, agents carry app roles. The server
+merges both into one permission set, so each tool checks one thing whoever calls it, and manager rights are
+a role nobody can grant themselves.
 
 ```mermaid
 flowchart LR
@@ -192,6 +211,9 @@ flowchart LR
 Tools a caller can't use are hidden from `tools/list`. Full tool list: [deep dive §3](docs/DEEP-DIVE.md#3-the-tools).
 
 ## Every call passes these gates
+
+Assume every call could be wrong, malicious or steered by a prompt injection. Each gate stops a different
+failure, cheap checks first, and only a call that passes all of them reaches your system.
 
 ```mermaid
 flowchart TD
@@ -220,7 +242,44 @@ flowchart TD
 
 Every control, with tests and official sources: [deep dive §4](docs/DEEP-DIVE.md#4-security).
 
+## When the model picks the wrong tool
+
+It will, sometimes: a different model, a vague request or an injected instruction is enough. Two jobs:
+make a wrong call **harmless**, and **measure** how often it happens so you can fix the tool design.
+
+```mermaid
+flowchart LR
+  ask[User request] --> pick{"Model picks a tool<br/>and arguments"}
+  pick -- "bad arguments" --> s1["Schema rejects them<br/>before the backend"]
+  pick -- "tool not allowed" --> s2["Hidden from the list,<br/>denied if called"]
+  pick -- "harmful action" --> s3["Policy in code,<br/>a human confirms"]
+  pick -- "right tool" --> ok[Result]
+  s1 --> fix["isError sentence:<br/>the model corrects itself"]
+  s2 --> fix
+  s3 --> fix
+  ev[("Eval set: request,<br/>expected tools, forbidden calls")] -. "run on every<br/>description change" .-> pick
+```
+
+| Practice | How |
+| --- | --- |
+| Design for selection | Few tools, verb-first names, one job each, descriptions that say when **not** to use them. The description is the prompt. |
+| Make wrong calls cheap | Schemas, permissions, policy in code, human confirmation, `isError` messages (this repo) |
+| Measure with evals | A small set of requests with the expected tool calls, run against the models your users use, on every change to tool names or descriptions |
+| Watch production | The audit line records tool and outcome; repeated `isError` or `denied` on a tool usually means its description misleads the model |
+
+An eval case is just data:
+
+```json
+{"request": "How much is the 2021 Tiguan, all in?",
+ "expect_tools": ["search_inventory", "quote_price"], "forbid": ["apply_discount"]}
+```
+
+This repo covers the first, second and fourth rows; an eval set is the next step.
+
 ## Human confirmation
+
+Some actions cost money or can't be undone. The server pauses and asks the person through their app; the
+request state is sealed, so the arguments can't change between the question and the answer.
 
 ```mermaid
 sequenceDiagram
@@ -240,6 +299,9 @@ Spec 2026-07-28 "multi round-trip". Older clients get the same rule through clas
 
 ## When the backend fails
 
+Your backend will be slow or down sometimes. The server answers fast and honestly instead of hanging,
+retries only what is safe to repeat, and stops hammering a backend that is clearly failing.
+
 ```mermaid
 flowchart LR
   c[Backend call] --> t{"Answer within 1.5 s?"}
@@ -255,6 +317,9 @@ Try it: `./scripts/demo.sh chaos flaky`.
 
 ## Ship it
 
+What you test is what you run: the image is built and scanned once, then promoted unchanged, and every
+change goes through a pull request that shows what the infrastructure change will do.
+
 ```mermaid
 flowchart LR
   pr[Pull request] --> ci["ci.yml<br/>tests, image scan,<br/>Bicep lint, what-if"]
@@ -268,7 +333,8 @@ GitHub signs in to Azure with OIDC: no stored secrets.
 
 ## See every call
 
-One JSON line per tool call, argument **names** only, never values:
+You must be able to answer "who did what, when, with which result" without leaking data into logs. Every
+tool call writes one JSON line, argument **names** only, never values, and Log Analytics makes it queryable:
 
 ```json
 {"event": "tool_call", "tool": "apply_discount", "arg_names": ["amount", "reason", "stock_number"],
@@ -283,6 +349,9 @@ ContainerAppConsoleLogs_CL
 ```
 
 ## From one server to hundreds
+
+One good server is the start. At company scale the same controls move into a shared gateway and registry,
+so hundreds of teams don't each rebuild them.
 
 ```mermaid
 flowchart LR
