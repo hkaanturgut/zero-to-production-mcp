@@ -45,7 +45,7 @@ with `git checkout stage-N`.
 
 4. Open: `src/live/server.py` in the editor; browser tabs with [architecture.svg](architecture.svg),
    the Azure portal on `rg-mcpshow` (API Management > APIs > dealer-mcp), and Log Analytics with the query
-   from [section 8](../README.md#8-observability-and-traceability).
+   from [section 8](../README.md#see-every-call).
 
 Stages 0 to 4 and the stage 5 code run on localhost with local dev tokens: no Wi-Fi needed.
 
@@ -189,7 +189,7 @@ Stages 0 to 4 and the stage 5 code run on localhost with local dev tokens: no Wi
 
 ## 11. Q&A (+54, 6 min)
 
-Backup slides: enterprise Q&A ([section 9](../README.md#9-enterprise-questions-answered)) and "From one server to
+Backup slides: enterprise Q&A ([section 9](DEEP-DIVE.md#9-enterprise-questions-answered)) and "From one server to
 hundreds" ([section 7](../README.md#from-one-server-to-hundreds)).
 
 **If you run behind, cut in this order:** stage 0 curl (say it); stage 2 schema picture; stage 3 curl;

@@ -28,8 +28,8 @@ Keep slides to the frame around the live build; the code is the content.
 | 9 | Finale | VS Code + Copilot, real Entra sign-in, $900 refused | Live |
 | 10 | Production checklist | Identity, least privilege, secrets, tool quality, failure and operations | `docs/CHECKLIST.md` as 5 columns |
 | 11 | Take it home | Repo QR, feedback QR, "Deploy your own: `azd up`", "Questions?" | Two QR codes |
-| B1 | Backup: enterprise Q&A | README section 9 headlines (incl. token relay vs on-behalf-of, masking in the server) | Text |
-| B2 | Backup: from one server to hundreds | README section 7 table: this repo vs Uber's MCP Gateway (800 servers, 5,000+ tools) | Two-column table |
+| B1 | Backup: enterprise Q&A | deep dive §9 headlines (docs/DEEP-DIVE.md) (incl. token relay vs on-behalf-of, masking in the server) | Text |
+| B2 | Backup: from one server to hundreds | README "From one server to hundreds" diagram: this repo vs Uber's MCP Gateway (800 servers, 5,000+ tools) | Two-column table |
 
 Stage ladder for slide 7:
 
