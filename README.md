@@ -95,6 +95,26 @@ A server can offer three kinds of capability:
 - **Resources**: data the host can read, such as files or records.
 - **Prompts**: reusable prompt templates the user picks.
 
+**What "JSON-RPC 2.0" means.** [JSON-RPC 2.0](https://www.jsonrpc.org/specification) is a tiny standard
+for calling a function on another machine with JSON. A request names a `method` and its `params`, and
+carries an `id`; the reply echoes that `id` with either a `result` or an `error`. MCP defines the
+methods (`tools/list`, `tools/call`, ...); over Streamable HTTP each one is a `POST /mcp`. Calling one
+of this server's tools looks like this:
+
+```json
+{"jsonrpc": "2.0", "id": 7, "method": "tools/call",
+ "params": {"name": "quote_price", "arguments": {"stock_number": "TBA-1017"}}}
+```
+
+```json
+{"jsonrpc": "2.0", "id": 7,
+ "result": {"structuredContent": {"all_in_price": 20209.5, "...": "..."}, "isError": false}}
+```
+
+Two kinds of failure, and the difference matters: a tool that runs but says no (for example, a discount
+over the limit) returns a normal `result` with `"isError": true` and a sentence the model can act on; a
+broken request (unknown method, malformed JSON) gets a JSON-RPC `error` object with a numeric `code`.
+
 ### Why MCP instead of a plain REST API?
 
 **Short answer: MCP doesn't replace your REST API. It sits in front of it.** The dealer system in this
