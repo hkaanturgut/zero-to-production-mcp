@@ -30,6 +30,12 @@ with `git checkout stage-N`.
 
 ## Before you start (T minus 45 min)
 
+> **No-terminal option:** open [`workshop/demo.ipynb`](../workshop/demo.ipynb) in VS Code and run the cells
+> in order instead of terminals T1 to T4. Each cell matches a step below (start the servers, switch stages,
+> make the Inspector-style calls as each persona, chaos, deploy, cloud checks); the manager confirmation asks
+> you y/n in a prompt. Pick the repo's `.venv` as the kernel. Keep MCP Inspector for anything you want to
+> show in its UI.
+
 1. Run `./scripts/preshow.sh --cloud` on the venue Wi-Fi. Expected: `ALL GREEN` (or only `git tree has changes`).
    - Green: cloud segments (deploy, sign-in, Copilot) run live, with videos V1 to V3 on standby.
    - Red, or API Management not available: play V3 for the deploy and V1 for the finale, and say why.

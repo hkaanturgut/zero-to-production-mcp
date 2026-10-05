@@ -385,6 +385,9 @@ With the helper scripts:
 ./scripts/demo.sh inspector salesperson    # terminal 3: MCP Inspector with a local token
 ```
 
+Prefer clicking to typing? Open [`workshop/demo.ipynb`](workshop/demo.ipynb) in VS Code and run the cells
+in order: it starts the servers, switches stages and makes every call of the session for you.
+
 Or by hand, running the full reference build (11 tools):
 
 ```bash
