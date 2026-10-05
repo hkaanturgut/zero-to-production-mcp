@@ -21,7 +21,7 @@ The deck: [`MCP-DevSummit-Toronto-Kaan-Turgut.pptx`](MCP-DevSummit-Toronto-Kaan-
 | 2 | About me | +0:30 | |
 | 3 | Every company has APIs. Agents need them | +1 | |
 | 4 | MCP sits in front of your API | +2 | |
-| 5 | Why not let the agent call the API? (REST vs MCP, when function calling is enough) | +3 | |
+| 5 | Why not let every agent call every API? (3 agents × 5 systems without MCP vs with MCP; when function calling is enough) | +3 | |
 | 6 | How MCP talks: JSON-RPC 2.0 (`tools/list`, `tools/call`, `isError` vs `error`) | +4 | proven live in `demo.ipynb` §2 |
 | 7 | What changed in MCP 2026-07-28 | +5 | |
 | 8 | Today's showcase: a Toronto used-car dealer | +6 | |
