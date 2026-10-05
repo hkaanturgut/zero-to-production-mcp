@@ -1,6 +1,6 @@
 # Stage runbook: From Zero to Production MCP Server
 
-**Turn Any API Into an Agent Tool.** MCP Dev Summit Toronto, Mon 5 Oct 2026. **60 minutes, Q&A included.** The step-by-step stage script is the README's [Demo: presenter guide](../README.md#demo-presenter-guide); this runbook keeps the full detail per stage (every paste block and expected output) for practice and recovery.
+**Turn Any API Into an Agent Tool.** MCP Dev Summit Toronto, Mon 5 Oct 2026. **60 minutes, Q&A included.** The step-by-step stage script is [PRESENTER.md](PRESENTER.md); this runbook keeps the full detail per stage (every paste block and expected output) for practice and recovery.
 
 You build `src/live/server.py` from an empty file to the production server, one stage at a time,
 then deploy it to Azure and call it from VS Code + GitHub Copilot with a real Microsoft Entra sign-in.

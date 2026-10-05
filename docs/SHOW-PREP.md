@@ -1,7 +1,7 @@
 # Show prep: MCP Dev Summit Toronto, Mon 5 Oct 2026
 
 Session: "From Zero to Production MCP Server: Turn Any API Into an Agent Tool".
-University room, **60 minutes including Q&A**. Stage script: the README's [Demo: presenter guide](../README.md#demo-presenter-guide); full detail: [RUNBOOK.md](RUNBOOK.md).
+University room, **60 minutes including Q&A**. Stage script: [PRESENTER.md](PRESENTER.md); full detail: [RUNBOOK.md](RUNBOOK.md).
 
 1. [Slides outline](#1-slides-outline)
 2. [Fallback plan](#2-fallback-plan)
@@ -16,7 +16,7 @@ Keep slides to the frame around the live build; the code is the content.
 
 | # | Slide | Content | Visual |
 | --- | --- | --- | --- |
-| 1 | Title | Session title, name, MCP Dev Summit Toronto 2026 | Repo QR (small, bottom right) |
+| 1 | Title (up while people arrive) | Session title, name, MCP Dev Summit Toronto 2026, and the setup line: `git clone https://github.com/hkaanturgut/zero-to-production-mcp && cd zero-to-production-mcp && ./scripts/demo.sh setup` | Repo QR, large: early arrivals start downloading |
 | 2 | The problem | Every company has internal APIs. Agents need them. A naive wrapper leaks data, trusts the model and falls over. | Three red marks on a "wrapper" box |
 | 3 | The pattern | An MCP server in front of the internal API: identity in, policy in code, minimum data out | Agent → MCP server → internal API |
 | 4 | What changed in MCP 2026-07-28 | Stateless (no initialize), multi round-trip confirmation (`InputRequiredResult`), CIMD replaces dynamic registration, Roots/Sampling/Logging deprecated | Four tiles, one per change |
@@ -27,7 +27,7 @@ Keep slides to the frame around the live build; the code is the content.
 | 8 | From commit to Azure | PR checks, build once, promote the same digest, OIDC (no secrets) | Pipeline strip from the architecture page |
 | 9 | Finale | VS Code + Copilot, real Entra sign-in, $900 refused | Live |
 | 10 | Production checklist | Identity, least privilege, secrets, tool quality, failure and operations | `docs/CHECKLIST.md` as 5 columns |
-| 11 | Take it home | Repo QR, feedback QR, "Questions?" | Two QR codes |
+| 11 | Take it home | Repo QR, feedback QR, "Deploy your own: `azd up`", "Questions?" | Two QR codes |
 | B1 | Backup: enterprise Q&A | README section 9 headlines (incl. token relay vs on-behalf-of, masking in the server) | Text |
 | B2 | Backup: from one server to hundreds | README section 7 table: this repo vs Uber's MCP Gateway (800 servers, 5,000+ tools) | Two-column table |
 
