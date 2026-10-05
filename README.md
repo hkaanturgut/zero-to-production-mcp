@@ -11,7 +11,7 @@ A fictional Toronto used-car dealer is the showcase; the patterns are the point.
 | --- | --- | --- |
 | An MCP server in front of an internal REST API, one stage at a time | Entra sign-in, a permission per tool, human confirmation, secrets the model never sees | Container Apps in a private network behind API Management, CI/CD with GitHub Actions |
 
-**Contents:** [Follow the workshop](#follow-the-workshop) · [Why MCP](#why-mcp) · [How MCP talks](#how-mcp-talks) ·
+**Contents:** [Follow the workshop](#follow-the-workshop) · [Workshop materials](#workshop-materials) · [Why MCP](#why-mcp) · [How MCP talks](#how-mcp-talks) ·
 [One request, end to end](#one-request-end-to-end) · [The build](#the-build-six-stages) ·
 [Who can do what](#who-can-do-what) · [Every call passes these gates](#every-call-passes-these-gates) ·
 [Wrong tool](#when-the-model-picks-the-wrong-tool) · [Human confirmation](#human-confirmation) · [When the backend fails](#when-the-backend-fails) ·
@@ -60,9 +60,26 @@ Each stage is a branch with the finished file. Fell behind? Check out the stage 
 `git checkout stage-3` shows the end of stage 3. The `main` branch has the finished server (stage 5)
 plus everything in this README.
 
+**Prefer clicking to terminals?** Open [`workshop/demo.ipynb`](workshop/demo.ipynb) in VS Code (Python and Jupyter
+extensions) and run its cells in order instead of the three terminals.
+
 **Try it with GitHub Copilot:** in VS Code, *MCP: List Servers > dealer-local > Start*, paste a token from
 `./scripts/demo.sh token salesperson`, and ask Copilot (Agent mode) to find an SUV, quote it and apply a
 $900 discount.
+
+### Workshop materials
+
+| File | For | What it is |
+| --- | --- | --- |
+| [`workshop/demo.ipynb`](workshop/demo.ipynb) | Everyone | The whole session as runnable cells: starts the servers, switches stages, makes every call. No terminal needed |
+| [`workshop/deploy-azure.ipynb`](workshop/deploy-azure.ipynb) | Anyone with an Azure subscription | Guided deploy of your own copy: sign in, choose subscription, name and region, deploy, test, delete |
+| [`docs/DEEP-DIVE.md`](docs/DEEP-DIVE.md) | Readers | Every practice with where it lives in the code and its official source; enterprise Q&A |
+| [`docs/PRESENTER.md`](docs/PRESENTER.md) | Presenter | The 60-minute stage script: what to run, show, say, and when |
+| [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | Presenter | Full per-stage detail: every paste block, expected output and recovery step |
+| [`docs/SHOW-PREP.md`](docs/SHOW-PREP.md) | Presenter | Slides outline, fallback plan, video scripts, show-morning checklist |
+| `scripts/preshow.sh` | Presenter | One command that checks both environments, resets demo data and makes a real-token call |
+| `workshop/rehearse.py` | Presenter | Runs all 34 runbook steps and reports PASS/FAIL (`./scripts/demo.sh rehearse`) |
+| [`docs/HLD.md`](docs/HLD.md), [`docs/CHECKLIST.md`](docs/CHECKLIST.md) | Architects | Design notes and the production checklist |
 
 ---
 
@@ -515,7 +532,7 @@ src/server/     MCP server, reference build (11 tools)
 src/live/       the file built on stage (equals workshop/stages/stage_5.py on main)
 tests/          76 tests over real HTTP with real JWTs
 infra/          main.bicep + modules: network, apim, apim-api, platform, entra, foundry
-workshop/       stage files 0-5, paste snippets, rehearsal script
+workshop/       demo.ipynb, deploy-azure.ipynb, stage files 0-5, paste snippets, rehearsal script
 scripts/        demo.sh, preshow.sh, smoke.sh, CI and azd hooks
 .github/        ci.yml (PR checks + what-if), release.yml (dev, then prod)
 docs/           deep dive, presenter guide, runbook, show prep, HLD, checklist, architecture.svg
