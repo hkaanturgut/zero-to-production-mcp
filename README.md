@@ -15,6 +15,8 @@ All cars, customers and leads are synthetic.
 
 **Contents**
 
+- **[Demo: presenter guide](#demo-presenter-guide)** (start here on stage)
+
 1. [MCP in five minutes](#1-mcp-in-five-minutes) · [Why MCP instead of a plain REST API?](#why-mcp-instead-of-a-plain-rest-api)
 2. [Architecture](#2-architecture)
 3. [The tools](#3-the-tools)
@@ -26,6 +28,53 @@ All cars, customers and leads are synthetic.
 9. [Enterprise questions, answered](#9-enterprise-questions-answered)
 10. [AI engineering lessons](#10-ai-engineering-lessons)
 11. [Quick start](#11-quick-start-offline-about-2-minutes) · [Tests](#12-run-the-tests) · [Deploy](#13-deploy-to-azure-bicep--azd) · [CI/CD](#14-cicd) · [Connect a client](#15-connect-a-client) · [Layout](#16-layout)
+
+---
+
+## Demo: presenter guide
+
+What to follow on stage, in order. Each segment says what to **do**, what to **show in code**, and
+what to **show as a picture**, so the audience sees how each part works as well as the result.
+Minute-by-minute commands and expected outputs: [docs/RUNBOOK.md](docs/RUNBOOK.md). Fallbacks and
+videos: [docs/SHOW-PREP.md](docs/SHOW-PREP.md).
+
+**Live or video?** Stages 0 to 4 and the stage 5 code run on localhost with local dev tokens, so they need
+no Wi-Fi: always live. Only the cloud segments (`azd deploy`, Entra sign-in, Copilot) need the network.
+Run `./scripts/preshow.sh --cloud` on the venue Wi-Fi at T minus 45 min: green means live with videos on
+standby; red (or API Management unavailable) means play V1 and V3 for those segments and say why.
+
+**Screen setup:** editor left (`src/live/server.py`), snippets right (`workshop/snippets/stage_N.txt`),
+terminals T1 to T4 per the runbook, browser tabs ready: the architecture diagram, the Azure portal on
+`rg-mcpshow`, the GitHub Actions run list, and Log Analytics.
+
+| Time | Segment | Do | Show in code | Show as a picture |
+| --- | --- | --- | --- | --- |
+| 10:50 | **Intro** (5 min) | The problem, the promise, the scenario | | [Architecture diagram](docs/architecture.svg): end state first, walk the 7 numbered steps |
+| 10:55 | **Stage 0** Empty file (5 min) | `git checkout stage-0`; start the DMS (T1) | `src/dms/app.py` endpoints; the raw `GET /vehicles` response with its VIN | Diagram: the "MCP server in front of an internal API" pattern; the N×M vs N+M table ([section 1](#why-mcp-instead-of-a-plain-rest-api)) |
+| 11:00 | **Stage 1** First tools (10 min) | Type `search_inventory`, `get_vehicle` over `call_dms` | `call_dms()` and the two tools in `src/live/server.py` | MCP Inspector: `tools/list`, then the raw dump (VIN, `../admin` leak): the three problems |
+| 11:10 | **Stage 2** Tools the model can use (12 min) | Typed inputs, `Vehicle` / `SearchResult` / `Quote`, `quote_price`, `/healthz` | `StockNumber`, the Pydantic models, `quote_price` calling `all_in_quote` (`src/server/domain/pricing.py`) | Inspector: the output schema next to the structured result; all-in **$20,209.50** |
+| 11:22 | **Stage 3** Identity and PII (15 min) | `EntraVerifier` with the `ROLES` map, `build_auth()` with `ENTRA_API_URI`, `caller()`, `create_lead` / `get_lead` | `ROLES` and `EntraVerifier` (scopes + roles become one permission set); `mask_lead` in `src/server/domain/masking.py` | Inspector: the 401 with `resource_metadata`, the PRM document; a decoded dev token (`scp`, `roles`); a masked lead; lead `L-760debbb3b70b3a1` with the injected note |
+| 11:37 | **Stage 4** Least privilege and confirmation (15 min) | Tags + `AuthMiddleware(restrict_tag)`, `apply_discount` policy, `delete_lead` | `apply_discount` (15% cap, $500 limit, manager); `confirmation()` in `src/server/tools/common.py` (both protocol eras) | Inspector as salesperson vs manager: different `tools/list`; the confirmation prompt; the persona table ([section 3](#3-the-tools)) |
+| 11:52 | **Stage 5** Resilience, audit, rate limit (6 min) | `asyncio.timeout` per attempt, reads-only retries, `AuditMiddleware`, `RateLimitingMiddleware` | `call_dms()` retry loop; `AuditMiddleware` in `src/server/middleware.py` | `./scripts/demo.sh chaos flaky` / `errors`: fast `isError` results; the JSON audit lines in T2 |
+| 11:58 | **Deploy** (5 min, includes the walkthrough) | `azd deploy mcp -e mcpshow` (about 75 s) | **While it builds:** `infra/main.bicep` (the modules); `infra/modules/apim-api.bicep` (`rate-limit-by-key` on the caller's `oid`); `platform.bicep` (`ipSecurityRestrictions`, Key Vault `publicNetworkAccess: 'Disabled'`, ACR firewall) | **While it builds**, Azure portal on `rg-mcpshow`: API Management > APIs > dealer-mcp > inbound policy; `ca-mcp-mcpshow` > Ingress > IP restrictions; `vnet-mcpshow` and the two private endpoints; Key Vault > Networking (disabled). Then `curl` the app directly: **403**; through the gateway: `healthz` ok |
+| 12:03 | **How it ships** (2 min) | Open the latest release run | `.github/workflows/release.yml` (build once, `az acr import` of the same digest), `scripts/acr-access.sh` | GitHub Actions run graph: changes → dev → prod; the PR what-if summary |
+| 12:05 | **Finale** (6 min) | VS Code: *MCP: List Servers > dealer-cloud > Start*, Microsoft sign-in, the finale prompt | The same `src/live/server.py`, unchanged, now in Azure | Copilot's tool calls; the $900 refusal; then the Log Analytics query from [section 8](#8-observability-and-traceability): your calls with caller, outcome and latency |
+| 12:11 | **Wrap-up and Q&A** (4 min) | Repo QR, feedback QR | `docs/CHECKLIST.md` | Backup slides: enterprise Q&A ([section 9](#9-enterprise-questions-answered)) and "From one server to hundreds" ([section 7](#from-one-server-to-hundreds)) |
+
+**Commands for the deploy walkthrough** (T4, while `azd deploy` runs):
+
+```bash
+MCP=$(azd env get-value MCP_URL -e mcpshow)                     # the API Management URL
+APP=$(az containerapp show -g rg-mcpshow -n ca-mcp-mcpshow --query properties.configuration.ingress.fqdn -o tsv)
+curl -s -o /dev/null -w "direct to the app: %{http_code}\n" "https://$APP/healthz"   # 403: only the gateway may call it
+curl -s "${MCP%/mcp}/healthz"                                    # {"status":"ok"} through API Management
+curl -s "${MCP%/mcp}/.well-known/oauth-protected-resource/mcp"   # sign-in metadata names the gateway URL
+az keyvault list -g rg-mcpshow --query "[0].properties.publicNetworkAccess" -o tsv   # Disabled
+```
+
+**If you run behind:** at 11:22 skip the decoded token; at 11:52 skip `chaos errors`; never skip starting
+the deploy by 11:58. The deploy walkthrough and "How it ships" can shrink to one picture each (the API
+Management policy and the Actions graph).
 
 ---
 
