@@ -83,6 +83,11 @@ md("""
 CI built the image once, scanned it and promoted the same digest to this environment (`release.yml`): it's the
 stage 5 file you just finished, unchanged. Set `DEPLOY_LIVE = True` in Setup only to show a live redeploy.
 """)
+md("""
+> **Principle: build once, promote the same artifact.** CI built, scanned and promoted this image; nothing is rebuilt on stage.
+>
+> **Show:** No redeploy needed.
+""")
 code(r'''
 if DEPLOY_LIVE:
     sh(f"azd deploy mcp -e {ENV} --no-prompt")
@@ -100,6 +105,11 @@ md("""
 Then prove the lock-down: the app refuses direct calls, the gateway answers. Clients reach the server only through
 API Management, with one rate limit per caller across replicas; Key Vault and the registry have no public access.
 """)
+md("""
+> **Principles: one front door; nothing reachable directly.** Only API Management is public; the app accepts only APIM's IP, and the dealer API has no public ingress at all.
+>
+> **Show:** Direct to the app: 403. Through the gateway: `{"status":"ok"}`.
+""")
 code(r'''
 app = sh(f"az containerapp show -g {RG} -n ca-mcp-{ENV} --query properties.configuration.ingress.fqdn -o tsv",
          quiet=True)
@@ -112,6 +122,11 @@ md("""
 
 The same request as the local finale, now through Entra ID and API Management. Your role in the Entra app
 decides what you may do, exactly like the local personas.
+""")
+md("""
+> **Principles: real identity; the same rules everywhere.** A real Entra token through APIM. The server validates it and applies exactly the policy you saw locally.
+>
+> **Show:** 6 tools, all-in 20209.5, and the $900 discount refused: same file, now with Entra in front.
 """)
 code(r'''
 token = sh(f"az account get-access-token --scope {API}/dms.read {API}/dms.write --query accessToken -o tsv",

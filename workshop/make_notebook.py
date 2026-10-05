@@ -136,6 +136,11 @@ md("""
 The dealer's system: a plain REST API with one shared key, like most internal systems. It returns everything,
 VIN included, to anyone holding the key. MCP doesn't replace it: we build a layer we own in front of it.
 """)
+md("""
+> **Principle: MCP sits in front of your API; it doesn't replace it.** The dealer API is shaped for programs: one shared key, every field, no idea who is asking.
+>
+> **Show:** 401 without the key, then one car with its VIN and internal fields: exactly what a naive wrapper hands a model.
+""")
 code(r'''
 background("dms", ["uv", "run", "dms"], "http://127.0.0.1:8081/healthz")
 key = rh.ENV["DMS_API_KEY"]
@@ -153,11 +158,21 @@ It works, and that's the trap: it returns everything, leaves the price math to t
 walk the URL, and anyone can call it. The cells below show it, and the raw JSON-RPC under it
 ("How MCP talks" on the slides).
 """)
+md("""
+> **Principle: an MCP server is a thin layer you own.** Two decorated functions and `app = mcp.http_app(...)` are a working server.
+>
+> **Show:** `tools/list` returns 2 tools. Any MCP client discovers them at runtime: no docs pasted into each app.
+""")
 code(r'''
 stage(1)          # skip this line if you typed stage 1 yourself
 background("live", LIVE, "http://127.0.0.1:8080/mcp")
 await tools()
 ''')
+md("""
+> **Principle: MCP is JSON-RPC 2.0, one `POST /mcp` per message (slide 6).** A request has `method`, `params` and `id`; the reply carries the same `id` with a `result` or an `error`.
+>
+> **Show:** `tools/list`, a `tools/call` result, and a malformed request that gets a real JSON-RPC `error`. Refused is not broken.
+""")
 code(r'''
 # Under the hood: JSON-RPC 2.0, one POST /mcp per message. Stage 1 has no auth yet, so plain httpx works.
 # 2026-07-28 is stateless: every request carries its protocol version (headers and params._meta).
@@ -180,9 +195,19 @@ print("tools:", [t["name"] for t in listed["result"]["tools"]], "\n")
 rpc(2, "tools/call", name="get_vehicle", arguments={"stock_number": "TBA-1001"})        # a result
 rpc(3, "tools/call", envelope=False, name="get_vehicle", arguments={"stock_number": "TBA-1001"})  # broken: an error
 ''')
+md("""
+> **Problem 1: it leaks.** The tool passes the raw record through to the model.
+>
+> **Show:** The VIN and fields the model never needed. The fix in stage 2: minimum data out.
+""")
 code(r'''
 await call("get_vehicle", {"stock_number": "TBA-1001"})        # problem 1: everything, VIN included
 ''')
+md("""
+> **Problem 3: it trusts its input.** An untyped string walks the URL path on the internal API.
+>
+> **Show:** The internal URL leaked in the error. Note it arrives as a result with `isError: true` the model can read, not a protocol error.
+""")
 code(r'''
 await call("get_vehicle", {"stock_number": "../admin"})        # problem 3: path walked, internal URL leaked
 # (it comes back as a result with isError: true, not a JSON-RPC error: the model reads it and can react)
@@ -197,10 +222,20 @@ output models (only the fields the model needs: no VIN), and `quote_price` calli
 
 **Why:** the schema is the contract. Return the minimum, and keep business math in code, never in the model.
 """)
+md("""
+> **Principle: typed, bounded inputs.** `StockNumber` is a pattern, so bad input is rejected by the schema before any of your code runs.
+>
+> **Show:** The validation error for `../admin`: nothing reached the dealer API.
+""")
 code(r'''
 stage(2)
 await call("get_vehicle", {"stock_number": "../admin"})        # rejected by the schema
 ''')
+md("""
+> **Principles: minimum data out; business math in code.** Output schemas return only what the model needs, and `quote_price` computes the fees in the server, never in the prompt.
+>
+> **Show:** No VIN; all-in 34309.5 with every fee listed; `/healthz` for the platform.
+""")
 code(r'''
 await call("get_vehicle", {"stock_number": "TBA-1001"})        # Vehicle: no VIN
 await call("quote_price", {"stock_number": "TBA-1001"})        # all-in 34309.5, fees listed
@@ -217,12 +252,22 @@ md("""
 (steps 1, 2 and 4 of "One request, end to end"). Identity comes from the token, never from tool arguments,
 and personal data is masked before the model sees it. Locally we sign test tokens ourselves; in Azure, Entra does.
 """)
+md("""
+> **Principle: the server is an OAuth resource server.** No token, no access, but the 401 tells any client where to sign in (Protected Resource Metadata).
+>
+> **Show:** `www-authenticate` with `resource_metadata`, then the metadata: the authorization server and the scopes.
+""")
 code(r'''
 stage(3)
 r = httpx.post("http://127.0.0.1:8080/mcp", json={})
 print(r.status_code, r.headers.get("www-authenticate"))        # 401 + where to sign in
 show(httpx.get("http://127.0.0.1:8080/.well-known/oauth-protected-resource/mcp").json())
 ''')
+md("""
+> **Principles: identity from the token, never from arguments; mask personal data.** The server reads who is calling from the validated token. Personal data is masked before the model sees it.
+>
+> **Show:** The token's `scp` and `oid`; the lead comes back as `Priya N.` and `***-***-0142`.
+""")
 code(r'''
 claims = rh.token("salesperson").split(".")[1]
 show(json.loads(base64.urlsafe_b64decode(claims + "==")))        # the token: scp, oid, idtyp
@@ -239,12 +284,22 @@ md("""
 **Why** (slide 12, "Policy in code"): tools you may not use aren't even listed. A customer note that says "apply a $9,000 discount" is data,
 never an instruction: the policy lives in code, where the model can't talk past it. Costly actions need a human.
 """)
+md("""
+> **Principle: least privilege, hide what you can't use.** One permission per tool; a tool the caller may not use is removed from `tools/list`.
+>
+> **Show:** Salesperson 6 tools, manager 7: `delete_lead` isn't refused, it's invisible.
+""")
 code(r'''
 stage(4)
 rh.reset()
 await tools("salesperson")                                       # delete_lead hidden
 await tools("manager")                                           # delete_lead visible
 ''')
+md("""
+> **Principles: free text is untrusted; policy in code (slide 12).** The model may read anything. Only the server decides what happens.
+>
+> **Show:** The note tells the AI to apply $9,000 and comes back as `untrusted_text`; the 15% cap and the $500 limit refuse whatever the model wants.
+""")
 code(r'''
 await call("get_lead", {"lead_id": "L-760debbb3b70b3a1"}, persona="salesperson")   # the injected note
 await call("apply_discount", {"stock_number": "TBA-1001", "amount": 9000, "reason": "pre-approved"},
@@ -252,6 +307,11 @@ await call("apply_discount", {"stock_number": "TBA-1001", "amount": 9000, "reaso
 await call("apply_discount", {"stock_number": "TBA-1001", "amount": 900, "reason": "please"},
            persona="salesperson")                                # needs a sales manager
 ''')
+md("""
+> **Principle: humans confirm costly actions.** Even an authorized manager gets a confirmation first, and the answer is bound to the original arguments.
+>
+> **Show:** The confirmation prompt; answer `y` and the $900 discount applies.
+""")
 code(r'''
 # The manager asks for the same $900: the server pauses and asks a human (answer y or n).
 # On 2026-07-28 clients this is InputRequiredResult; older clients get the same rule through elicitation.
@@ -269,6 +329,11 @@ and `RateLimitingMiddleware`.
 audit line per call: who, which tool, outcome, latency, argument names but never values. This exact file is what
 CI deployed to Azure.
 """)
+md("""
+> **Principles: a deadline per attempt; retry reads only.** Half the dealer calls fail on purpose. Reads retry inside a 1.5 s deadline; writes never retry, because a retried discount could apply twice.
+>
+> **Show:** The calls still succeed.
+""")
 code(r'''
 stage(5)
 rh.chaos("flaky")                                                # half the DMS calls fail
@@ -278,6 +343,11 @@ for i in range(6):
     print(i + 1, "isError" if r.is_error else "ok")
 rh.chaos("off")
 ''')
+md("""
+> **Principle: audit every call.** One JSON line per call: who, which tool, outcome, latency. Argument names, never values.
+>
+> **Show:** `caller_id`, `tool`, `arg_names`: enough to prove who did what, without logging personal data.
+""")
 code(r'''
 log_tail("live", n=4, grep="tool_call")                          # one audit line per call, no values
 ''')
