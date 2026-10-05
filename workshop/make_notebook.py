@@ -1,4 +1,5 @@
-"""Builds workshop/demo.ipynb: the whole session as one notebook, no terminal needed.
+"""Builds workshop/demo.ipynb (build and run locally, then connect your chat), azure.ipynb (the
+deployed version) and deploy-azure.ipynb (deploy your own copy). No terminal needed.
 
     uv run python workshop/make_notebook.py
 """
@@ -18,18 +19,19 @@ def code(text: str) -> None:
 
 
 md("""
-# Zero to Production MCP: the live demo
+# Zero to Production MCP: build it locally
 
-Run each cell in order with ▶ (or *Run All*). Background processes (the dealer system, the MCP server,
-the deploy) are started and stopped by the cells; their logs are in `.dev/notebook/`. The editor and the
-VS Code Copilot finale stay in the GUI. Timings follow [docs/PRESENTER.md](../docs/PRESENTER.md).
+Run each cell in order with ▶ (or *Run All*). Everything runs on your machine: the cells start the dealer
+system and the MCP server, switch stages and make every call; their logs are in `.dev/notebook/`. At the end
+you connect GitHub Copilot to the server you just built. No Azure needed: the deployed version is
+[azure.ipynb](azure.ipynb). Timings follow [docs/PRESENTER.md](../docs/PRESENTER.md).
 
 **Kernel:** pick the repo's `.venv` (Python) when VS Code asks.
 """)
 
 code(r'''
 # Setup: run once. Every cell below uses these helpers.
-import asyncio, base64, json, os, subprocess, sys, time
+import base64, json, os, subprocess, sys, time
 from pathlib import Path
 
 ROOT = Path.cwd() if (Path.cwd() / "pyproject.toml").exists() else Path.cwd().parent
@@ -43,16 +45,11 @@ if Path(sys.prefix).resolve() != VENV.resolve():
         "(run ./scripts/demo.sh setup first if .venv doesn't exist), then run this cell again.")
 import httpx
 import rehearse as rh
-from fastmcp import Client
-from fastmcp.client.auth import BearerAuth
 
 LOGS = ROOT / ".dev" / "notebook"
 LOGS.mkdir(parents=True, exist_ok=True)
 RUNNING: dict = {}
-AUTO = os.environ.get("NOTEBOOK_AUTO") == "1"   # headless test: no prompts, no VS Code diff, no Azure calls
-# The Azure show environment already runs the finished server (deployed by CI). Leave this False to
-# show it as is; True runs `azd deploy mcp -e mcpshow` live in stage 5 (about 75 s).
-DEPLOY_LIVE = False
+AUTO = os.environ.get("NOTEBOOK_AUTO") == "1"   # headless test: no prompts, no VS Code diff
 LIVE = ["uv", "run", "uvicorn", "live.server:app", "--app-dir", "src", "--port", "8080",
         "--reload", "--reload-dir", "src/live"]
 
@@ -88,7 +85,8 @@ def log_tail(name: str, n: int = 8, grep: str | None = None):
 def stage(n: int):
     """Set src/live/server.py to stage n; open the diff vs n-1 in VS Code."""
     if AUTO:
-        run(f"git checkout stage-{n} -- src/live/server.py")
+        run(f"git checkout stage-{n} -- src/live/server.py 2>/dev/null"
+            f" || git checkout origin/stage-{n} -- src/live/server.py")
     else:
         run(f"./scripts/demo.sh stage {n}")
     time.sleep(2.5)  # the server reloads on save
@@ -116,14 +114,9 @@ async def call(tool, args=None, persona=None, confirm=False):
         show(r.structured_content if r.structured_content is not None else [b.text for b in r.content])
 
 
-def azd(key):
-    return subprocess.run(["azd", "env", "get-value", key, "-e", "mcpshow"],
-                          capture_output=True, text=True).stdout.strip()
-
-
 for port in (8080, 8081):
     if not rh.port_free(port):
-        print(f"Port {port} is busy: stop the terminal servers first (or run the Cleanup cell).")
+        print(f"Port {port} is busy: run the Cleanup cell at the bottom (it frees both ports), then this cell again.")
 print("ready")
 ''')
 
@@ -217,18 +210,11 @@ await call("apply_discount", {"stock_number": "TBA-1001", "amount": 900, "reason
 md("""
 ## 6. Stage 5: resilience and audit (+36)
 
-The finished server is already running in Azure (deployed by CI). Set `DEPLOY_LIVE = True` in the Setup
-cell only if you want to redeploy live here (about 75 s, builds while you continue). To create your own
-Azure environment, use [deploy-azure.ipynb](deploy-azure.ipynb).
+**Code (diff):** `attempts = 3 if method == "GET" else 1`, the `asyncio.timeout(1.5)` block,
+`AuditMiddleware` and `RateLimitingMiddleware`.
 """)
 code(r'''
 stage(5)
-if DEPLOY_LIVE and not AUTO:
-    background("deploy", ["azd", "deploy", "mcp", "-e", "mcpshow", "--no-prompt"])
-else:
-    print("No redeploy: this code already runs in Azure behind API Management.")
-''')
-code(r'''
 rh.chaos("flaky")                                                # half the DMS calls fail
 for i in range(6):
     async with rh.client("salesperson") as c:
@@ -241,43 +227,41 @@ log_tail("live", n=4, grep="tool_call")                          # one audit lin
 ''')
 
 md("""
-## 7. Deploy and the production walkthrough (+41)
+## 7. Connect your chat to the server you built (+41)
 
-Show the API Management policy and the private network in the portal, then prove the lock-down on the
-running environment (read-only: nothing is changed).
+The server from stage 5 is still running on `http://127.0.0.1:8080/mcp`. Now a real client uses it.
+
+1. Run the cell below: fresh demo data and a **salesperson** token.
+2. VS Code: *MCP: List Servers* > `dealer-local` > *Start*, and paste the token when asked.
+3. Copilot Chat, **Agent** mode:
+   > A customer wants an AWD SUV under $25,000 with under 100,000 km. Find the best match, give me the
+   > all-in price, save her as a lead (Priya Natarajan, 416-555-0142), and apply a $900 discount.
+
+**Expected:** TBA-1017 (2021 Tiguan), all-in **$20,209.50**, the lead saved with a masked phone, and
+**"Discounts over $500 need a sales manager."** If Copilot picks another car, use it: the model chooses,
+the server keeps every choice safe.
 """)
 code(r'''
-if DEPLOY_LIVE and not AUTO:
-    log_tail("deploy", n=4)                                      # wait for SUCCESS (about 75 s)
-''')
-code(r'''
-if not AUTO:
-    mcp_url = azd("MCP_URL")
-    app = subprocess.run(["az", "containerapp", "show", "-g", "rg-mcpshow", "-n", "ca-mcp-mcpshow", "--query",
-                          "properties.configuration.ingress.fqdn", "-o", "tsv"], capture_output=True, text=True).stdout.strip()
-    print("direct to the app:  ", httpx.get(f"https://{app}/healthz", timeout=15).status_code)   # 403
-    print("through the gateway:", httpx.get(mcp_url.removesuffix("/mcp") + "/healthz", timeout=15).text)
+rh.reset()
+print(rh.token("salesperson"))                                   # paste into dealer-local when asked
 ''')
 
 md("""
-## 8. Finale (+46)
-
-In VS Code: *MCP: List Servers* > `dealer-local` > *Start* (token below), run the Copilot prompt, then the same
-with `dealer-cloud`. The cell below is the backup: the same request against the cloud, from here.
+Every call Copilot made went through the server you built: one audit line each, argument names only.
 """)
 code(r'''
-print(rh.token("salesperson"))                                   # paste into dealer-local when asked
+log_tail("live", n=10, grep="tool_call")
 ''')
+
+md("""
+**Now as a manager:** *MCP: Reset Cached Inputs*, then restart `dealer-local` and paste the manager token below.
+Ask Copilot to apply the same $900 discount to TBA-1017: VS Code asks you to confirm before the server applies it,
+and `delete_lead` now shows in the tool list.
+
+**Next:** the same server, deployed in Azure behind API Management: [azure.ipynb](azure.ipynb).
+""")
 code(r'''
-if not AUTO:
-    api = azd("ENTRA_API_URI")
-    tok = subprocess.run(["az", "account", "get-access-token", "--scope", f"{api}/dms.read", f"{api}/dms.write",
-                          "--query", "accessToken", "-o", "tsv"], capture_output=True, text=True).stdout.strip()
-    async with Client(azd("MCP_URL"), auth=BearerAuth(tok)) as c:
-        q = await c.call_tool("quote_price", {"stock_number": "TBA-1017"}, raise_on_error=False)
-        d = await c.call_tool("apply_discount", {"stock_number": "TBA-1017", "amount": 900, "reason": "finale"},
-                              raise_on_error=False)
-    print("cloud all-in:", q.structured_content["all_in_price"], "| discount:", d.content[0].text)
+print(rh.token("manager"))
 ''')
 
 md("""
@@ -286,6 +270,7 @@ md("""
 code(r'''
 for name in list(RUNNING):
     stop_bg(name)
+run("lsof -ti tcp:8080,8081 -sTCP:LISTEN | xargs kill 2>/dev/null")  # also orphans from an earlier kernel
 run("./scripts/demo.sh stage done")
 print("stopped; src/live/server.py is back to main")
 ''')
@@ -310,9 +295,10 @@ def build(cells_in: list) -> dict:
 
 
 if __name__ == "__main__":
+    from make_azure_notebook import AZURE_CELLS
     from make_deploy_notebook import DEPLOY_CELLS
 
-    for name, cells in (("demo.ipynb", CELLS), ("deploy-azure.ipynb", DEPLOY_CELLS)):
+    for name, cells in (("demo.ipynb", CELLS), ("azure.ipynb", AZURE_CELLS), ("deploy-azure.ipynb", DEPLOY_CELLS)):
         out = Path(__file__).with_name(name)
         out.write_text(json.dumps(build(cells), indent=1) + "\n")
         print(f"wrote {out} ({len(cells)} cells)")

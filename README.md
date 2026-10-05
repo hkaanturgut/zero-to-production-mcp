@@ -61,7 +61,9 @@ Each stage is a branch with the finished file. Fell behind? Check out the stage 
 plus everything in this README.
 
 **Prefer clicking to terminals?** Open [`workshop/demo.ipynb`](workshop/demo.ipynb) in VS Code (Python and Jupyter
-extensions) and run its cells in order instead of the three terminals.
+extensions) and run its cells in order instead of the three terminals. It runs everything locally and ends by
+connecting Copilot to the server you built; [`workshop/azure.ipynb`](workshop/azure.ipynb) continues with the
+deployed version.
 
 **Try it with GitHub Copilot:** in VS Code, *MCP: List Servers > dealer-local > Start*, paste a token from
 `./scripts/demo.sh token salesperson`, and ask Copilot (Agent mode) to find an SUV, quote it and apply a
@@ -71,7 +73,8 @@ $900 discount.
 
 | File | For | What it is |
 | --- | --- | --- |
-| [`workshop/demo.ipynb`](workshop/demo.ipynb) | Everyone | The whole session as runnable cells: starts the servers, switches stages, makes every call. No terminal needed |
+| [`workshop/demo.ipynb`](workshop/demo.ipynb) | Everyone | Build and run it locally: starts the servers, switches stages, makes every call, then connects Copilot to your server. No terminal, no Azure |
+| [`workshop/azure.ipynb`](workshop/azure.ipynb) | Anyone with access to a deployment | The deployed version: the lock-down behind API Management, a real Entra call, Copilot on `dealer-cloud`. Read-only by default |
 | [`workshop/deploy-azure.ipynb`](workshop/deploy-azure.ipynb) | Anyone with an Azure subscription | Guided deploy of your own copy: sign in, choose subscription, name and region, deploy, test, delete |
 | [`docs/DEEP-DIVE.md`](docs/DEEP-DIVE.md) | Readers | Every practice with where it lives in the code and its official source; enterprise Q&A |
 | [`docs/PRESENTER.md`](docs/PRESENTER.md) | Presenter | The 60-minute stage script: what to run, show, say, and when |
@@ -403,7 +406,8 @@ With the helper scripts:
 ```
 
 Prefer clicking to typing? Open [`workshop/demo.ipynb`](workshop/demo.ipynb) in VS Code and run the cells
-in order: it starts the servers, switches stages and makes every call of the session for you.
+in order: it starts the servers, switches stages and makes every call of the session for you, then connects
+Copilot to the server you built.
 
 Or by hand, running the full reference build (11 tools):
 
@@ -532,7 +536,7 @@ src/server/     MCP server, reference build (11 tools)
 src/live/       the file built on stage (equals workshop/stages/stage_5.py on main)
 tests/          76 tests over real HTTP with real JWTs
 infra/          main.bicep + modules: network, apim, apim-api, platform, entra, foundry
-workshop/       demo.ipynb, deploy-azure.ipynb, stage files 0-5, paste snippets, rehearsal script
+workshop/       demo.ipynb, azure.ipynb, deploy-azure.ipynb, stage files 0-5, paste snippets, rehearsal script
 scripts/        demo.sh, preshow.sh, smoke.sh, CI and azd hooks
 .github/        ci.yml (PR checks + what-if), release.yml (dev, then prod)
 docs/           deep dive, presenter guide, runbook, show prep, HLD, checklist, architecture.svg

@@ -32,8 +32,9 @@ with `git checkout stage-N`.
 
 > **No-terminal option:** open [`workshop/demo.ipynb`](../workshop/demo.ipynb) in VS Code and run the cells
 > in order instead of terminals T1 to T4. Each cell matches a step below (start the servers, switch stages,
-> make the Inspector-style calls as each persona, chaos, deploy, cloud checks); the manager confirmation asks
-> you y/n in a prompt. Pick the repo's `.venv` as the kernel. Keep MCP Inspector for anything you want to
+> make the Inspector-style calls as each persona, chaos), and it ends with the local half of the finale
+> (tokens for `dealer-local`, the audit lines of Copilot's calls); the manager confirmation asks you y/n in a
+> prompt. Sections 8 and 9 (cloud) are [`workshop/azure.ipynb`](../workshop/azure.ipynb). Pick the repo's `.venv` as the kernel. Keep MCP Inspector for anything you want to
 > show in its UI.
 
 1. Run `./scripts/preshow.sh --cloud` on the venue Wi-Fi. Expected: `ALL GREEN` (or only `git tree has changes`).
@@ -147,7 +148,7 @@ Stages 0 to 4 and the stage 5 code run on localhost with local dev tokens: no Wi
 
 1. **Run** `./scripts/demo.sh stage 5`.
 2. **No redeploy needed:** this exact file already runs in Azure (CI deployed it). Optional: show a live
-   deploy with `azd deploy mcp -e mcpshow` (about 75 s, or `DEPLOY_LIVE = True` in the notebook).
+   deploy with `azd deploy mcp -e mcpshow` (about 75 s, or `DEPLOY_LIVE = True` in `workshop/azure.ipynb`).
 3. **Code (diff):** `attempts = 3 if method == "GET" else 1`, the `asyncio.timeout(1.5)` block,
    `AuditMiddleware` and `RateLimitingMiddleware`.
 4. **Run** `./scripts/demo.sh chaos flaky` (T4), then **Inspector:** `get_vehicle` TBA-1001 a few times →
