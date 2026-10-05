@@ -1,7 +1,7 @@
 # Show prep: MCP Dev Summit Toronto, Mon 5 Oct 2026
 
 Session: "From Zero to Production MCP Server: Turn Any API Into an Agent Tool".
-10:50 to 12:15, University room, 85 minutes. Minute-by-minute flow: [RUNBOOK.md](RUNBOOK.md).
+University room, **60 minutes including Q&A**. Stage script: the README's [Demo: presenter guide](../README.md#demo-presenter-guide); full detail: [RUNBOOK.md](RUNBOOK.md).
 
 1. [Slides outline](#1-slides-outline)
 2. [Fallback plan](#2-fallback-plan)
@@ -64,7 +64,7 @@ not the glitch.
 | A paste or typo breaks the file | Server reload error in T2 | `cp workshop/stages/stage_N.py src/live/server.py` (reloads on save) |
 | Lost in a stage | Behind the clock checkpoint | `git checkout stage-N` and continue; use the runbook's "If behind" cuts |
 | MCP Inspector won't open | Browser tab blank or port busy | Restart T3 (`./scripts/demo.sh inspector <persona>`); else Inspector CLI: `npx @modelcontextprotocol/inspector --cli http://127.0.0.1:8080/mcp --transport http --header "Authorization: Bearer $(./scripts/demo.sh token salesperson)" --method tools/list` |
-| `azd deploy` slow (over 3 min) or fails | No "SUCCESS" by 12:01 | Keep going: mcpshow already runs stage 5 code from the rehearsal deploy. If mcpshow itself is down, use `dealer-spare` (mcprehearse). Show V3 for the deploy. |
+| `azd deploy` slow (over 3 min) or fails | No "SUCCESS" by +43 | Keep going: mcpshow already runs stage 5 code from the rehearsal deploy. If mcpshow itself is down, use `dealer-spare` (mcprehearse). Show V3 for the deploy. |
 | API Management gateway down | `dealer-cloud` times out; Resource Health says "being upgraded" | Switch to `dealer-spare` (mcprehearse). Say it: the Developer tier has no SLA; production uses Premium. |
 | Entra sign-in in VS Code fails | Error or no browser prompt | Retry once from *MCP: List Servers > dealer-cloud > Start*; else play V1. |
 | Copilot picks odd tools or wanders | Wrong car, extra calls | Use the exact prompt (V1 script); name the car ("the 2021 Tiguan"). Explain: the server enforces policy whatever the model does. |
@@ -110,7 +110,7 @@ before and after recording (it resets demo data and turns the manager role off).
 ### T minus 2 h (hotel)
 
 - [ ] `./scripts/preshow.sh` → **ALL GREEN** (tools, envs, manager role off, demo data reset, real-token call, git clean, Inspector cached, rehearse 34/34)
-- [ ] `git checkout stage-0`; `git status` clean
+- [ ] On `main`: `./scripts/demo.sh stage 0` (stay on `main` for the whole talk)
 - [ ] Videos V1 to V3 on the laptop **and** a second device, playable offline
 - [ ] Charger, USB-C to HDMI adapter, clicker, phone hotspot tested
 
@@ -126,8 +126,8 @@ before and after recording (it resets demo data and turns the manager role off).
 ### T minus 10 min
 
 - [ ] `./scripts/preshow.sh --cloud` one last time (resets show data; about 1 min)
-- [ ] Editor shows `src/live/server.py` (stage 0) and `workshop/snippets/stage_1.txt`
-- [ ] Water, timer visible (checkpoints: stage 3 by 11:22, stage 5 by 11:52, deploy started by 11:58)
+- [ ] Editor shows `src/live/server.py` (stage 0)
+- [ ] Water, timer visible (checkpoints: stage 3 by +18, stage 5 by +36, deploy started by +38, Q&A by +54)
 
 ### After the talk (Monday afternoon)
 

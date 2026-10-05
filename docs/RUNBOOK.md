@@ -1,6 +1,6 @@
 # Stage runbook: From Zero to Production MCP Server
 
-**Turn Any API Into an Agent Tool.** MCP Dev Summit Toronto, Mon 5 Oct 2026, 10:50 to 12:15 (85 min).
+**Turn Any API Into an Agent Tool.** MCP Dev Summit Toronto, Mon 5 Oct 2026. **60 minutes, Q&A included.** The step-by-step stage script is the README's [Demo: presenter guide](../README.md#demo-presenter-guide); this runbook keeps the full detail per stage (every paste block and expected output) for practice and recovery.
 
 You build `src/live/server.py` from an empty file to the production server, one stage at a time,
 then deploy it to Azure and call it from VS Code + GitHub Copilot with a real Microsoft Entra sign-in.
@@ -20,19 +20,25 @@ If a paste goes wrong, `cp workshop/stages/stage_N.py src/live/server.py` (the s
 
 ## Timing
 
-| # | Segment | Min | Clock | Running |
+| # | Segment | Min | Starts | Running |
 | --- | --- | --- | --- | --- |
-| | Intro | 5 | 10:50 to 10:55 | 5 |
-| 0 | Empty file, the pattern | 5 | 10:55 to 11:00 | 10 |
-| 1 | First tools | 10 | 11:00 to 11:10 | 20 |
-| 2 | Tools the model can use | 12 | 11:10 to 11:22 | 32 |
-| 3 | Auth, identity, PII | 15 | 11:22 to 11:37 | 47 |
-| 4 | Least privilege, policy, confirmation | 15 | 11:37 to 11:52 | 62 |
-| 5 | Resilience, audit, rate limit, deploy | 13 | 11:52 to 12:05 | 75 |
-| | Finale: Copilot on the deployed server | 6 | 12:05 to 12:11 | 81 |
-| | Q&A / buffer | 4 | 12:11 to 12:15 | 85 |
+| | Intro | 3 | +0 | 3 |
+| 0 | The internal API | 2 | +3 | 5 |
+| 1 | First tools (typed live) | 7 | +5 | 12 |
+| 2 | Tools the model can use | 6 | +12 | 18 |
+| 3 | Auth, identity, PII | 9 | +18 | 27 |
+| 4 | Least privilege, policy, confirmation | 9 | +27 | 36 |
+| 5 | Resilience, audit (deploy starts at +38) | 5 | +36 | 41 |
+| | Deploy and production walkthrough | 5 | +41 | 46 |
+| | Finale: Copilot on the deployed server | 6 | +46 | 52 |
+| | Wrap-up | 2 | +52 | 54 |
+| | Q&A | 6 | +54 | 60 |
 
-Checkpoints: be at stage 3 by **11:22**, stage 5 by **11:52**, `azd deploy` started by **11:58**.
+Checkpoints: stage 3 by **+18**, stage 5 by **+36**, `azd deploy` started by **+38**, Q&A by **+54**.
+
+**60-minute flow:** stay on `main`; type stage 1 live; for stages 2 to 5 run `./scripts/demo.sh stage N`
+(sets `src/live/server.py` to stage N and opens the VS Code diff against N-1) and walk the key lines.
+The TYPE and PASTE instructions below are the full-length version, for practice.
 
 ---
 
@@ -68,16 +74,16 @@ Note: the stage 0 file has no `app`, so start T2 (`demo.sh live`) only once stag
 
 ---
 
-## Intro (5 min)
+## Intro (3 min)
 
 - Problem: every company has internal APIs; agents need them; a naive wrapper leaks data, trusts the model, and falls over.
-- Promise: in 85 minutes, empty file to a deployed, authenticated, least-privilege MCP server.
+- Promise: in one hour, empty file to a deployed, authenticated, least-privilege MCP server.
 - Spec context, MCP 2026-07-28: stateless servers, no `initialize` handshake, CIMD replaces Dynamic Client Registration, multi round-trip requests (MRTR) for human input.
 - Attendees: clone the repo; to start stage N run `git checkout stage-<N-1>`.
 
 ---
 
-## Stage 0: empty file, the pattern (5 min)
+## Stage 0: empty file, the pattern (2 min)
 
 **Goal:** show the internal API the server will wrap. **Branch:** `stage-0`.
 
@@ -103,7 +109,7 @@ curl -s -H "X-API-Key: $DMS_API_KEY" 'http://127.0.0.1:8081/vehicles?limit=1'  #
 
 ---
 
-## Stage 1: first tools (10 min)
+## Stage 1: first tools (7 min)
 
 **Goal:** two working tools over `call_dms`, then expose what is wrong with them. **Branch:** start `stage-0`, end `stage-1`.
 
@@ -160,7 +166,7 @@ app = mcp.http_app(path="/mcp")
 
 ---
 
-## Stage 2: tools the model can use (12 min)
+## Stage 2: tools the model can use (6 min)
 
 **Goal:** typed, bounded inputs; output schemas (`Vehicle`, `SearchResult`, `Quote`); `quote_price` with business math in code; `/healthz`.
 **Branch:** start `stage-1`, end `stage-2`.
@@ -217,7 +223,7 @@ async def quote_price(stock_number: StockNumber) -> Quote:
 
 ---
 
-## Stage 3: Entra auth, caller identity, PII (15 min)
+## Stage 3: Entra auth, caller identity, PII (9 min)
 
 **Goal:** verify Entra (or local) tokens, merge people's scopes and agents' app roles into one permission set, take identity from the token, add `create_lead` / `get_lead` with masking and untrusted note text.
 **Branch:** start `stage-2`, end `stage-3`.
@@ -293,7 +299,7 @@ curl -s http://127.0.0.1:8080/.well-known/oauth-protected-resource/mcp
 
 ---
 
-## Stage 4: least privilege, policy in code, human confirmation (15 min)
+## Stage 4: least privilege, policy in code, human confirmation (9 min)
 
 **Goal:** permission per tool tag, hidden tools, `apply_discount` with policy in code, confirmation via `confirmation()`, `delete_lead` for managers.
 **Branch:** start `stage-3`, end `stage-4`.
@@ -351,7 +357,7 @@ Restart T3 as manager: `./scripts/demo.sh inspector manager`
 
 ---
 
-## Stage 5: resilience, audit, rate limit, deploy (13 min)
+## Stage 5: resilience, audit, rate limit, deploy (5 min + 5 min deploy walkthrough)
 
 **Goal:** per-attempt deadline, retries for reads only, clean retryable errors, audit log, per-caller rate limit; then ship it.
 **Branch:** start `stage-4`, end `stage-5`.
@@ -405,7 +411,7 @@ azd deploy mcp -e mcpshow
 
 **Talking point:** the deploy just shipped into a private network. Clients reach the server only through API Management, which applies one rate limit per caller across all replicas; Key Vault and the registry have no open public access.
 
-**If behind:** skip "show the problem first", skip `chaos errors`. Never skip starting `azd deploy` by 11:58; if it is not started by 12:00, go straight to the hot spare (below).
+**If behind:** skip "show the problem first", skip `chaos errors`. Never skip starting `azd deploy` by +38; if it is not started by +40, go straight to the hot spare (below).
 
 ---
 
