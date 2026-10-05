@@ -34,7 +34,6 @@ The deck: [`MCP-DevSummit-Toronto-Kaan-Turgut.pptx`](MCP-DevSummit-Toronto-Kaan-
 | 15 | The production checklist | +52 | |
 | 16 | What to take home | +53 | |
 | 17 | Thank you. Questions? | +54 | Q&A |
-| 18 | Backup | Q&A | |
 
 Stage ladder (also the first cell of `demo.ipynb`):
 
