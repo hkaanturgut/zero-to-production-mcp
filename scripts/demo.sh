@@ -8,6 +8,8 @@
 #   ./scripts/demo.sh reset            fresh demo data, chaos off
 #   ./scripts/demo.sh inspector [persona]   MCP Inspector, pre-connected to :8080 (with a token from stage 3)
 #   ./scripts/demo.sh rehearse         run every runbook step automatically and report PASS/FAIL
+#   ./scripts/demo.sh stage 2          set src/live/server.py to stage N, open the diff vs N-1 in VS Code
+#   ./scripts/demo.sh stage done       put the file back to main (after the talk)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -37,5 +39,14 @@ case "${1:-}" in
     [ -n "${2:-}" ] && args+=(--header "Authorization: Bearer $(uv run dev-token "$2")")
     exec npx -y @modelcontextprotocol/inspector "${args[@]}" ;;
   rehearse)  exec uv run python workshop/rehearse.py "${@:2}" ;;
-  *) sed -n '2,12p' "$0"; exit 1 ;;
+  stage)
+    # Stay on main (latest scripts, docs, mcp.json); swap only the file built on stage.
+    n="${2:?stage number 0-5, or done}"
+    if [ "$n" = "done" ]; then git checkout main -- src/live/server.py && echo "src/live/server.py = main"; exit 0; fi
+    git checkout "stage-$n" -- src/live/server.py && echo "src/live/server.py = stage $n"
+    if [ "$n" -gt 0 ] && command -v code >/dev/null; then
+      prev="${TMPDIR:-/tmp}/stage-$((n - 1))-server.py"
+      git show "stage-$((n - 1)):src/live/server.py" > "$prev" && code --diff "$prev" src/live/server.py
+    fi ;;
+  *) sed -n '2,14p' "$0"; exit 1 ;;
 esac
