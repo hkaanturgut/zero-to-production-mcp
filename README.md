@@ -376,48 +376,142 @@ Comparison and enterprise questions: [deep dive §7 and §9](docs/DEEP-DIVE.md#f
 
 ### Locally (about 2 minutes, no Azure)
 
+With the helper scripts:
+
 ```bash
-./scripts/demo.sh setup        # dependencies, .env, local signing keys
-./scripts/demo.sh dms          # terminal 1: mock dealer system on :8081
-./scripts/demo.sh live         # terminal 2: the MCP server on :8080/mcp
-./scripts/demo.sh inspector salesperson   # terminal 3: MCP Inspector with a local token
+./scripts/demo.sh setup                    # dependencies, .env, local signing keys
+./scripts/demo.sh dms                      # terminal 1: mock dealer system on :8081
+./scripts/demo.sh live                     # terminal 2: the stage-built server on :8080/mcp, reloads on save
+./scripts/demo.sh inspector salesperson    # terminal 3: MCP Inspector with a local token
 ```
 
-Tests: `uv run pytest -q` (76) · runbook check: `./scripts/demo.sh rehearse` (34 steps).
+Or by hand, running the full reference build (11 tools):
+
+```bash
+uv sync
+cp .env.example .env                       # then set DMS_API_KEY to any long random string
+set -a; source .env; set +a
+uv run dms &                               # mock dealer system on :8081
+uv run dev-token salesperson > /dev/null   # creates .dev/ keys on first run
+uv run server                              # reference MCP server on :8080/mcp
+
+TOKEN=$(uv run dev-token salesperson)      # or: manager, agent, readonly
+npx @modelcontextprotocol/inspector --cli http://127.0.0.1:8080/mcp \
+  --transport http --header "Authorization: Bearer $TOKEN" --method tools/list
+```
+
+Local tokens are signed by a key in `.dev/` (git-ignored) and only work with `AUTH_MODE=local`.
+In Azure the server runs with `AUTH_MODE=entra` and trusts only Microsoft Entra ID.
+
+Other helpers: `./scripts/demo.sh token <persona>` prints a token, `chaos slow|errors|flaky|off`
+breaks the dealer system on purpose, `reset` restores the demo data, `stage N` swaps in a stage file.
+
+### Tests
+
+```bash
+uv run pytest -q              # 76 tests over real HTTP with real JWTs
+uv run ruff check src tests
+./scripts/demo.sh rehearse    # 34 runbook steps, end to end
+```
+
+| File | Covers |
+| --- | --- |
+| `test_auth.py` | Token validation, scope and role mapping, hidden tools |
+| `test_policy_and_danger.py` | Discount limits, 15% cap, confirmation, prompt-injection resistance |
+| `test_resilience_and_safety.py` | Timeouts, retries, circuit breaker, error masking, secret hygiene, rate limit, audit |
+| `test_read_tools.py`, `test_write_tools.py` | Search, quotes, validation; leads, idempotency, masking, ownership |
+| `test_domain.py` | Pricing, HST, finance, policy, masking |
+| `test_tool_contracts.py` | Every tool has one permission tag, annotations and a schema |
+| `test_legacy_clients.py` | Confirmation for 2025-11-25 clients |
+| `test_hardening.py` | Foreign `Origin` rejected; confirmation across two replicas |
+| `test_live_stages.py` | Every workshop stage file |
 
 ### Deploy to Azure
 
-Needs [azd](https://aka.ms/azd) 1.35+ and rights to create resource groups and app registrations.
+Needs [azd](https://aka.ms/azd) 1.35+, the Azure CLI, and rights to create resource groups and app registrations.
 
 ```bash
 azd auth login && az login
 azd env new mcpdev --location canadacentral
 azd up                       # about 45 min (mostly API Management)
 azd env get-value MCP_URL    # https://apim-mcpdev-<id>.azure-api.net/mcp
-azd deploy mcp               # later: ship new server code only, about 75 s
-azd down --purge --force     # delete everything
 ```
 
-CI/CD: pushes to `main` deploy dev; prod runs on `gh workflow run release.yml -f scope=all -f prod=true`.
+| Command | When |
+| --- | --- |
+| `azd deploy mcp` | Ship new server code only, about 75 s (what happens on stage) |
+| `azd provision` | Infrastructure only |
+| `azd env set MCP_COMMAND server && azd provision` | Run the full reference build in the cloud instead of the stage build |
+| `azd env set ASSIGN_MANAGER_ROLE true && azd provision` | Make yourself a sales manager (confirmation demo in VS Code) |
+| `azd env set DEPLOY_FOUNDRY true && azd provision` | Add a Foundry account, project and model |
+| `azd down --purge --force` | Delete everything, including the soft-deleted Key Vault |
+
+What you get: a resource group with a VNet, API Management (the public URL), a Container Apps environment
+with `ca-mcp` (accepts only the gateway) and `ca-dms` (internal), Premium ACR and Key Vault behind private
+endpoints, a managed identity, Log Analytics + Application Insights, and the Entra app registration.
+
+### CI/CD
+
+| Workflow | Runs on | Does |
+| --- | --- | --- |
+| `ci.yml` | Pull request | ruff + pytest, Docker build + Trivy, Bicep build + lint, `azd provision --preview` what-if on dev |
+| `release.yml` | Push to `main`, or manual | Provision if infra changed; build once, scan, deploy dev, smoke test; prod gets the same digest via `az acr import` |
+
+```bash
+gh workflow run release.yml -f scope=all -f prod=true    # promote to prod (mcpshow)
+```
+
+| Setting | Level | Value |
+| --- | --- | --- |
+| `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_LOCATION` | Repo variables | CI identity (OIDC), subscription, region |
+| `AZURE_ENV_NAME` | Environment variable (`dev`, `prod`) | `mcpdev`, `mcpshow` |
+| `DMS_API_KEY` | Environment secret (`dev`, `prod`) | Service key, written to Key Vault |
+
+Don't run `azd provision` from a laptop on the CI-owned environments: the preprovision hook would
+generate a new `DMS_API_KEY` that no longer matches the GitHub secret. `azd deploy mcp` is fine.
 
 ### Connect a client
 
-| Client | How |
-| --- | --- |
-| VS Code + GitHub Copilot | *MCP: List Servers* > `dealer-cloud` (or `dealer-local`) > *Start* |
-| Claude Code | `claude mcp add --transport http dealer-cloud "$(azd env get-value MCP_URL)" --header "Authorization: Bearer $TOKEN"` |
-| MCP Inspector | `npx @modelcontextprotocol/inspector@latest --web --transport http --server-url "$(azd env get-value MCP_URL)" --header "Authorization: Bearer $TOKEN" --protocol-era modern` |
-| Foundry agent | App-only with the agent's identity: [docs/foundry-agent.md](docs/foundry-agent.md) |
+The server is a standard remote MCP endpoint: Streamable HTTP plus OAuth 2.0 bearer tokens from Entra.
+A client that calls without a token gets a 401 pointing to the sign-in metadata, so MCP-aware clients
+sign in on their own.
 
-Get `$TOKEN` with `az account get-access-token --scope "$(azd env get-value ENTRA_API_URI)/dms.read" --query accessToken -o tsv`.
+**VS Code + GitHub Copilot.** `.vscode/mcp.json` has three servers: `dealer-local` (asks for a local
+token), `dealer-cloud` (the show environment, Microsoft sign-in) and `dealer-spare` (the hot spare).
+Run *MCP: List Servers* > pick one > *Start*, then use Copilot in Agent mode.
+
+**Claude Code** (bearer token from the Azure CLI, which is pre-authorized on the Entra app):
+
+```bash
+API=$(azd env get-value ENTRA_API_URI)
+TOKEN=$(az account get-access-token --scope "$API/dms.read" "$API/dms.write" --query accessToken -o tsv)
+claude mcp add --transport http dealer-cloud "$(azd env get-value MCP_URL)" \
+  --header "Authorization: Bearer $TOKEN"
+```
+
+**MCP Inspector:**
+
+```bash
+npx @modelcontextprotocol/inspector@latest --web --transport http \
+  --server-url "$(azd env get-value MCP_URL)" \
+  --header "Authorization: Bearer $TOKEN" --protocol-era modern
+```
+
+**Microsoft Foundry agent:** app-only, with the agent's own identity and the `dms.agent.*` roles.
+See [docs/foundry-agent.md](docs/foundry-agent.md).
 
 ### Layout
 
 ```
-src/dms/      mock dealer system         src/live/    the file built on stage (stage 5 on main)
-src/server/   reference build            tests/       76 tests over real HTTP with real JWTs
-infra/        Bicep modules for azd      workshop/    stage files, snippets, rehearsal
-.github/      ci.yml, release.yml        docs/        deep dive, presenter guide, runbook, HLD
+src/dms/        mock dealer system (FastAPI, API key, chaos switch)
+src/server/     MCP server, reference build (11 tools)
+src/live/       the file built on stage (equals workshop/stages/stage_5.py on main)
+tests/          76 tests over real HTTP with real JWTs
+infra/          main.bicep + modules: network, apim, apim-api, platform, entra, foundry
+workshop/       stage files 0-5, paste snippets, rehearsal script
+scripts/        demo.sh, preshow.sh, smoke.sh, CI and azd hooks
+.github/        ci.yml (PR checks + what-if), release.yml (dev, then prod)
+docs/           deep dive, presenter guide, runbook, show prep, HLD, checklist, architecture.svg
 ```
 
 ---
