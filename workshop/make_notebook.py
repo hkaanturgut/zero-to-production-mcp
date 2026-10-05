@@ -35,6 +35,12 @@ from pathlib import Path
 ROOT = Path.cwd() if (Path.cwd() / "pyproject.toml").exists() else Path.cwd().parent
 os.chdir(ROOT)
 sys.path.insert(0, str(ROOT / "workshop"))
+VENV = ROOT / ".venv"
+if Path(sys.prefix).resolve() != VENV.resolve():
+    raise RuntimeError(
+        f"Wrong kernel: this notebook needs the repo's .venv, but it's running {sys.executable}. "
+        "Top right: click the kernel name > Select Another Kernel > Python Environments > .venv "
+        "(run ./scripts/demo.sh setup first if .venv doesn't exist), then run this cell again.")
 import httpx
 import rehearse as rh
 from fastmcp import Client

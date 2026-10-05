@@ -35,11 +35,17 @@ No Docker: the image is built in Azure.
 
 code(r'''
 # Setup: helpers used below.
-import getpass, json, os, re, subprocess, time
+import getpass, json, os, re, subprocess, sys, time
 from pathlib import Path
 
 ROOT = Path.cwd() if (Path.cwd() / "pyproject.toml").exists() else Path.cwd().parent
 os.chdir(ROOT)
+VENV = ROOT / ".venv"
+if Path(sys.prefix).resolve() != VENV.resolve():
+    raise RuntimeError(
+        f"Wrong kernel: this notebook needs the repo's .venv, but it's running {sys.executable}. "
+        "Top right: click the kernel name > Select Another Kernel > Python Environments > .venv "
+        "(run ./scripts/demo.sh setup first if .venv doesn't exist), then run this cell again.")
 DRY_RUN = os.environ.get("DEPLOY_NB_AUTO") == "1"   # headless test: default answers, nothing created
 LOGS = ROOT / ".dev" / "notebook"
 LOGS.mkdir(parents=True, exist_ok=True)
